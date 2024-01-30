@@ -51,10 +51,6 @@ Suite 120, Rockville, Maryland 20850 USA.
 // Windows: %APPDATA%\Homepath Name
 #define HOMEPATH_NAME				"Spearmint"
 
-// Steam installation information
-//#define STEAMPATH_NAME			"Quake 3 Arena"
-//#define STEAMPATH_APPID			"2200"
-
 // Separates games in server browser. Must NOT contain whitespace (dpmaster will reject the game servers).
 // Change this if not compatible with Spearmint games aka cannot play them (such as if you break VM compatibility).
 #define GAMENAME_FOR_MASTER			"Spearmint"
@@ -87,6 +83,9 @@ Suite 120, Rockville, Maryland 20850 USA.
 
 // In the future if the client-server protocol is modified, this may allow old and new engines to play together
 //#define LEGACY_PROTOCOL
+
+// URL protocol scheme. "quake3://connect/127.0.0.1"
+#define PROTOCOL_HANDLER			"spearmint"
 
 // Heartbeat for dpmaster protocol. You shouldn't change this unless you know what you're doing
 #define HEARTBEAT_FOR_MASTER		"DarkPlaces"
@@ -420,6 +419,8 @@ typedef enum {
 	TRAP_LOG10,
 	TRAP_SYSCALL
 } qvmTraps_t;
+
+typedef intptr_t (QDECL *vmMainProc)(int callNum, int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8, int arg9, int arg10, int arg11);
 
 void	VM_Init( void );
 vm_t	*VM_Create( const char *module, intptr_t (*systemCalls)(intptr_t *), 
@@ -1230,7 +1231,7 @@ NON-PORTABLE SYSTEM SERVICES
 void	Sys_Init (void);
 
 // general development dll loading for virtual machine testing
-void	* QDECL Sys_LoadGameDll( const char *name, intptr_t (QDECL **entryPoint)(int, ...),
+void	* QDECL Sys_LoadGameDll( const char *name, vmMainProc *entryPoint,
 				  intptr_t (QDECL *systemcalls)(intptr_t, ...) );
 void	Sys_UnloadDll( void *dllHandle );
 
@@ -1277,8 +1278,6 @@ int		Sys_StatFile( char *ospath );
 char	*Sys_Cwd( void );
 void	Sys_SetDefaultInstallPath(const char *path);
 char	*Sys_DefaultInstallPath(void);
-char	*Sys_SteamPath(void);
-char	*Sys_GogPath(void);
 
 #ifdef __APPLE__
 char    *Sys_DefaultAppPath(void);

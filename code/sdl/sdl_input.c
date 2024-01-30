@@ -498,7 +498,15 @@ static qboolean IN_SetGameControllerDefaults( int localPlayerNum, int joystickNu
 		{ SDL_CONTROLLER_BUTTON_DPAD_UP, K_JOY_DPAD_UP },
 		{ SDL_CONTROLLER_BUTTON_DPAD_DOWN, K_JOY_DPAD_DOWN },
 		{ SDL_CONTROLLER_BUTTON_DPAD_LEFT, K_JOY_DPAD_LEFT },
-		{ SDL_CONTROLLER_BUTTON_DPAD_RIGHT, K_JOY_DPAD_RIGHT }
+		{ SDL_CONTROLLER_BUTTON_DPAD_RIGHT, K_JOY_DPAD_RIGHT },
+#if SDL_VERSION_ATLEAST( 2, 0, 14 )
+		{ SDL_CONTROLLER_BUTTON_MISC1, K_JOY_MISC1 },
+		{ SDL_CONTROLLER_BUTTON_PADDLE1, K_JOY_PADDLE1 },
+		{ SDL_CONTROLLER_BUTTON_PADDLE2, K_JOY_PADDLE2 },
+		{ SDL_CONTROLLER_BUTTON_PADDLE3, K_JOY_PADDLE3 },
+		{ SDL_CONTROLLER_BUTTON_PADDLE4, K_JOY_PADDLE4 },
+		{ SDL_CONTROLLER_BUTTON_TOUCHPAD, K_JOY_TOUCHPAD }
+#endif
 	};
 
 	SDL_GameControllerButtonBind bind;
@@ -703,7 +711,10 @@ static void IN_InitJoystick( void )
 		Q_strcat(buf, sizeof(buf), "\n");
 	}
 
-	Cvar_Get( "in_availableJoysticks", buf, CVAR_ROM );
+	Cvar_Get( "in_availableJoysticks", "", CVAR_ROM );
+
+	// Update cvar on in_restart or controller add/remove.
+	Cvar_Set( "in_availableJoysticks", buf );
 
 	if ( !joyEnabled ) {
 		Com_DPrintf( "Joystick is not active.\n" );
@@ -1166,6 +1177,20 @@ static void IN_ProcessEvents( void )
 				{
 					char *filename = e.drop.file;
 
+#if defined(PROTOCOL_HANDLER) && defined(__APPLE__)
+					// Handle macOS open URL event. URL protocol scheme must be set in Info.plist.
+					if( !Q_strncmp( filename, PROTOCOL_HANDLER ":", strlen( PROTOCOL_HANDLER ":" ) ) )
+					{
+						char *protocolCommand = Sys_ParseProtocolUri( filename );
+
+						if( protocolCommand )
+						{
+							Cbuf_ExecuteText( EXEC_APPEND, va( "%s\n", protocolCommand ) );
+							free( protocolCommand );
+						}
+					}
+					else
+#endif
 					// ZTM: TODO: Open file and check for DEMO_MAGIC so it work with any demo extension?
 					if ( FS_IsDemoExt( filename, strlen( filename ) ) ) {
 						CL_PlayDemo( filename );
@@ -1268,6 +1293,8 @@ void IN_Init( void *windowData )
 		in_joystickThreshold[i] = Cvar_Get( Com_LocalPlayerCvarName(i, "in_joystickThreshold"), "0.15", CVAR_ARCHIVE );
 		Cvar_CheckRange(in_joystickThreshold[i], 0, 0.9f, qfalse);
 	}
+
+	SDL_EventState( SDL_DROPFILE, SDL_ENABLE );
 
 	SDL_StartTextInput( );
 

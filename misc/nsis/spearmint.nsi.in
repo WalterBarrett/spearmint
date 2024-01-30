@@ -14,6 +14,7 @@
 !define RENDERER_PREFIX "spearmint-renderer-"
 !define GAMEDIR "Spearmint"
 !define GAMEKEY "spearmint"
+!define PROTOCOL_HANDLER "spearmint"
 
 !define MULTIUSER_MUI
 !define MULTIUSER_EXECUTIONLEVEL Highest
@@ -27,6 +28,8 @@
 
 !include "MUI2.nsh"
 !define MUI_ICON "../spearmint.ico"
+
+!include LogicLib.nsh
 
 ; The name of the installer
 Name "${GAMENAME} ${VERSION}"
@@ -53,7 +56,7 @@ OutFile "XXXFILENAMEXXX"
 
 !insertmacro MULTIUSER_PAGE_INSTALLMODE
 ;!insertmacro MUI_PAGE_LICENSE "../../COPYING.txt"
-!define MUI_COMPONENTSPAGE_NODESC
+!define MUI_COMPONENTSPAGE_SMALLDESC
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -79,7 +82,7 @@ Function un.onInit
 FunctionEnd
 
 ; The stuff to install
-Section "${GAMENAME} ${VERSION}-${RELEASE} (required)"
+Section "${GAMENAME} ${VERSION}-${RELEASE} (required)" ioquake3
 
   SectionIn RO
 
@@ -87,9 +90,6 @@ Section "${GAMENAME} ${VERSION}-${RELEASE} (required)"
   SetOutPath $INSTDIR
 
   File "../../build/release-mingw32-x86/SDL2.dll"
-!ifndef USE_INTERNAL_SPEEX
-  File "libspeex.dll"
-!endif
 !ifndef USE_INTERNAL_ZLIB
   File "zlib1.dll"
 !endif
@@ -127,7 +127,7 @@ Section "${GAMENAME} ${VERSION}-${RELEASE} (required)"
 SectionEnd
 
 ; Optional section (can be disabled by the user)
-Section "Start Menu Shortcuts"
+Section "Start Menu Shortcuts" StartMenuShortcuts
 
   CreateDirectory "$SMPROGRAMS\${GAMENAME}"
   CreateShortCut "$SMPROGRAMS\${GAMENAME}\Uninstall.lnk" "$INSTDIR\uninstall.exe" "" "$INSTDIR\uninstall.exe" 0
@@ -135,8 +135,18 @@ Section "Start Menu Shortcuts"
 
 SectionEnd
 
+Section "Protocol Handler" ProtocolHandler
+
+  WriteRegStr SHCTX "Software\Classes\${PROTOCOL_HANDLER}" "CustomUrlApplication" "$INSTDIR\${CLIENT}"
+  WriteRegStr SHCTX "Software\Classes\${PROTOCOL_HANDLER}" "CustomUrlArguments" '--uri "%1"'
+  WriteRegStr SHCTX "Software\Classes\${PROTOCOL_HANDLER}" "URL Protocol" ""
+  WriteRegStr SHCTX "Software\Classes\${PROTOCOL_HANDLER}\DefaultIcon" "" "$INSTDIR\${CLIENT},0"
+  WriteRegStr SHCTX "Software\Classes\${PROTOCOL_HANDLER}\shell\open\command" "" '"$INSTDIR\${CLIENT}" --uri "%1"'
+
+SectionEnd
+
 !ifdef USE_OPENAL_DLOPEN
-Section "OpenAL-Soft library"
+Section "OpenAL-Soft library" OpenAL
 
   SetOutPath $INSTDIR
 
@@ -146,7 +156,7 @@ SectionEnd
 !endif
 
 !ifdef USE_CURL_DLOPEN
-Section "libcurl"
+Section "libcurl" libcurl
 
   SetOutPath $INSTDIR
 
@@ -165,6 +175,12 @@ Section "Uninstall"
   DeleteRegKey SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\${GAMEKEY}"
   DeleteRegKey SHCTX "Software\${GAMEKEY}"
 
+  ReadRegStr $0 SHCTX "Software\Classes\${PROTOCOL_HANDLER}\shell\open\command" ""
+  ${If} $0 == '"$INSTDIR\${CLIENT}" --uri "%1"'
+  DeleteRegKey SHCTX "Software\Classes\${PROTOCOL_HANDLER}"
+  ${EndIf}
+
+
   ; Remove files and uninstaller
   Delete $INSTDIR\${CLIENT}
   Delete $INSTDIR\${SERVER}
@@ -179,9 +195,6 @@ Section "Uninstall"
   Delete $INSTDIR\voip-readme.txt
 
   Delete $INSTDIR\SDL2.dll
-!ifndef USE_INTERNAL_SPEEX
-  Delete $INSTDIR\libspeex.dll
-!endif
 !ifndef USE_INTERNAL_ZLIB
   Delete $INSTDIR\zlib1.dll
 !endif
@@ -207,3 +220,15 @@ Section "Uninstall"
   RMDir "$INSTDIR"
 
 SectionEnd
+
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+  !insertmacro MUI_DESCRIPTION_TEXT ${ioquake3} "The game executables."
+  !insertmacro MUI_DESCRIPTION_TEXT ${StartMenuShortcuts} "Create shortcuts in the start menu."
+  !insertmacro MUI_DESCRIPTION_TEXT ${ProtocolHandler} "The protocol handler lets you connect to a game by clicking a link in a web browser."
+!ifdef USE_OPENAL_DLOPEN
+  !insertmacro MUI_DESCRIPTION_TEXT ${OpenAL} "Advanced audio mixer that supports surround sound."
+!endif
+!ifdef USE_CURL_DLOPEN
+  !insertmacro MUI_DESCRIPTION_TEXT ${libcurl} "Used for HTTP file downloads."
+!endif
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
