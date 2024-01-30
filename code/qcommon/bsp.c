@@ -67,12 +67,16 @@ bspFile_t *BSP_Load( const char *name ) {
 	int				length;
 	bspFile_t		*bspFile = NULL;
 	int				freeSlot = -1;
+	char			adjname[MAX_QPATH];
+	vfsNum_t		vfs = VFS_DEFAULT;
 
 #ifndef BSPC
 	if ( !name || !name[0] ) {
 		Com_Error( ERR_DROP, "BSP_Load: NULL name" );
 	}
 #endif
+
+	FS_GetQPathAndVFS(name, adjname, &vfs);
 
 	// check if already loaded
 	for ( i = 0; i < MAX_BSP_FILES; i++ ) {
@@ -97,7 +101,7 @@ bspFile_t *BSP_Load( const char *name ) {
 	// load the file
 	//
 #ifndef BSPC
-	length = FS_ReadFile( name, &buf.v );
+	length = FS_ReadFile_VFS( adjname, &buf.v, vfs );
 #else
 	length = LoadQuakeFile((quakefile_t *) name, &buf.v);
 #endif
@@ -111,7 +115,11 @@ bspFile_t *BSP_Load( const char *name ) {
 	// check formats
 	//
 	for ( i = 0; i < numBspFormats; i++ ) {
+#ifndef BSPC
+		bspFile = bspFormats[i]->loadFunction( bspFormats[i], name, buf.v, length, vfs );
+#else
 		bspFile = bspFormats[i]->loadFunction( bspFormats[i], name, buf.v, length );
+#endif
 		if ( bspFile ) {
 			break;
 		}

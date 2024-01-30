@@ -46,7 +46,7 @@ typedef struct _TargaHeader {
 	unsigned char	pixel_size, attributes;
 } TargaHeader;
 
-void R_LoadTGA ( const char *name, int *numTexLevels, textureLevel_t **pic)
+void R_LoadTGA ( const char *name, int *numTexLevels, textureLevel_t **pic, vfsNum_t vfs)
 {
 	unsigned	columns, rows, numPixels;
 	byte	*pixbuf;
@@ -67,7 +67,7 @@ void R_LoadTGA ( const char *name, int *numTexLevels, textureLevel_t **pic)
 	//
 	// load the file
 	//
-	length = ri.FS_ReadFile ( ( char * ) name, &buffer.v);
+	length = ri.FS_ReadFile_VFS ( ( char * ) name, &buffer.v, vfs);
 	if (!buffer.b || length < 0) {
 		return;
 	}

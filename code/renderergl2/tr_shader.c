@@ -28,6 +28,7 @@ Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 #include "tr_local.h"
+#include "../qcommon/qcommon.h"
 
 // tr_shader.c -- this file deals with the parsing and definition of shaders
 
@@ -54,9 +55,13 @@ static char aliasShader[ MAX_QPATH ] = { 0 };
 static	shader_t*		hashTable[FILE_HASH_SIZE];
 
 #define MAX_SHADERTEXT_HASH		2048
-static char **shaderTextHashTable[MAX_SHADERTEXT_HASH];
+static char **shaderTextHashTable[VFS_MAX][MAX_SHADERTEXT_HASH];
 
 static void ClearShaderStage( int num );
+
+void *RE_GetShaderTable( void ) {
+	return hashTable;
+}
 
 /*
 ================
@@ -66,13 +71,11 @@ return a hash value for the filename
 #ifdef __GNUCC__
   #warning TODO: check if long is ok here 
 #endif
-static long generateHashValue( const char *fname, const int size ) {
-	int		i;
-	long	hash;
+static long generateHashValue( const char *fname, const int size, vfsNum_t vfs ) {
+	int		i = 0; // 1;
+	long	hash = 0; // (long)(' ' + vfs)*119;
 	char	letter;
 
-	hash = 0;
-	i = 0;
 	while (fname[i] != '\0') {
 		letter = tolower(fname[i]);
 		if (letter =='.') break;				// don't include extension
@@ -86,15 +89,15 @@ static long generateHashValue( const char *fname, const int size ) {
 	return hash;
 }
 
-void R_RemapShader(const char *shaderName, const char *newShaderName, const char *timeOffset) {
+void R_RemapShader(const char *shaderName, const char *newShaderName, const char *timeOffset, vfsNum_t vfs, vfsNum_t newVfs) {
 	char		strippedName[MAX_QPATH];
 	int			hash;
 	shader_t	*sh, *sh2;
 	qhandle_t	h;
 
-	sh = R_FindShaderByName( shaderName );
+	sh = R_FindShaderByName( shaderName, vfs );
 	if (sh == NULL || sh == tr.defaultShader) {
-		h = RE_RegisterShaderEx(shaderName, 0, qtrue);
+		h = RE_RegisterShaderEx(shaderName, 0, qtrue, vfs);
 		sh = R_GetShaderByHandle(h);
 	}
 	if (sh == NULL || sh == tr.defaultShader) {
@@ -102,9 +105,9 @@ void R_RemapShader(const char *shaderName, const char *newShaderName, const char
 		return;
 	}
 
-	sh2 = R_FindShaderByName( newShaderName );
+	sh2 = R_FindShaderByName( newShaderName, newVfs );
 	if (sh2 == NULL || sh2 == tr.defaultShader) {
-		h = RE_RegisterShaderEx(newShaderName, 0, qtrue);
+		h = RE_RegisterShaderEx(newShaderName, 0, qtrue, newVfs);
 		sh2 = R_GetShaderByHandle(h);
 	}
 
@@ -116,7 +119,7 @@ void R_RemapShader(const char *shaderName, const char *newShaderName, const char
 	// remap all the shaders with the given name
 	// even tho they might have different lightmaps
 	COM_StripExtension(shaderName, strippedName, sizeof(strippedName));
-	hash = generateHashValue(strippedName, FILE_HASH_SIZE);
+	hash = generateHashValue(strippedName, FILE_HASH_SIZE, vfs);
 	for (sh = hashTable[hash]; sh; sh = sh->next) {
 		if (Q_stricmp(sh->name, strippedName) == 0) {
 			if (sh != sh2) {
@@ -164,7 +167,7 @@ RE_SetSurfaceShader
 Set shader for given world surface
 ==============
 */
-void RE_SetSurfaceShader( int surfaceNum, const char *name ) {
+void RE_SetSurfaceShader( int surfaceNum, const char *name, vfsNum_t vfs ) {
 	msurface_t	*surf;
 	qboolean wasCustom, nowCustom;
 
@@ -182,9 +185,9 @@ void RE_SetSurfaceShader( int surfaceNum, const char *name ) {
 	if ( !name ) {
 		surf->shader = surf->originalShader;
 	} else if ( surf->originalShader ) {
-		surf->shader = R_FindShader( name, surf->originalShader->lightmapIndex, MIP_RAW_IMAGE );
+		surf->shader = R_FindShader( name, surf->originalShader->lightmapIndex, MIP_RAW_IMAGE, vfs );
 	} else {
-		surf->shader = R_FindShader( name, LIGHTMAP_NONE, MIP_RAW_IMAGE );
+		surf->shader = R_FindShader( name, LIGHTMAP_NONE, MIP_RAW_IMAGE, vfs );
 	}
 
 	nowCustom = ( surf->shader != surf->originalShader );
@@ -228,7 +231,7 @@ lightmapIndex=LIGHTMAP_2D will create shader for 2D UI/HUD usage.
 lightmapIndex >= 0 will use the default lightmap for the surface.
 ==============
 */
-qhandle_t RE_GetSurfaceShader( int surfaceNum, int lightmapIndex ) {
+qhandle_t RE_GetSurfaceShader( int surfaceNum, int lightmapIndex, vfsNum_t vfs ) {
 	msurface_t	*surf;
 	shader_t	*shd;
 	int			i;
@@ -248,7 +251,7 @@ qhandle_t RE_GetSurfaceShader( int surfaceNum, int lightmapIndex ) {
 	}
 
 	if ( lightmapIndex < 0 && surf->shader->lightmapIndex != lightmapIndex ) {
-		shd = R_FindShader( surf->shader->name, lightmapIndex, MIP_RAW_IMAGE );
+		shd = R_FindShader( surf->shader->name, lightmapIndex, MIP_RAW_IMAGE, vfs );
 
 		// ZTM: FIXME: I'm not sure forcing lighting diffuse is good idea...
 		//             at least allow const and waveform
@@ -297,7 +300,7 @@ qhandle_t RE_GetShaderFromModel( qhandle_t hModel, int surfnum, int lightmapInde
 				surfnum = 0;
 			}
 
-			return RE_GetSurfaceShader( bmodel->firstSurface + surfnum + 1, lightmapIndex );
+			return RE_GetSurfaceShader( bmodel->firstSurface + surfnum + 1, lightmapIndex, model->vfs );
 		}
 	}
 
@@ -315,6 +318,16 @@ void RE_GetShaderName( qhandle_t hShader, char *buffer, int bufferSize ) {
 	shader = R_GetShaderByHandle( hShader );
 
 	Q_strncpyz( buffer, shader->name, bufferSize );
+}
+
+/*
+==============
+RE_GetShaderVFS
+==============
+*/
+int RE_GetShaderVFS( qhandle_t hShader ) {
+	shader_t	*shader = R_GetShaderByHandle( hShader );
+	return shader->vfs;
 }
 
 /*
@@ -1087,7 +1100,7 @@ static void ParseTexMod( char *_text, textureBundle_t *bundle )
 ParseStage
 ===================
 */
-static qboolean ParseStage( shaderStage_t *stage, char **text, int *ifIndent )
+static qboolean ParseStage( shaderStage_t *stage, char **text, int *ifIndent, vfsNum_t vfs )
 {
 	char keyword[64];
 	char *token;
@@ -1294,9 +1307,9 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, int *ifIndent )
 				continue;
 			} else {
 				bundle->image[0] = R_FindImageFile( token, IMGTYPE_COLORALPHA,
-						IMGFLAG_LIGHTMAP | IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE );
+						IMGFLAG_LIGHTMAP | IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, vfs );
 				if ( !bundle->image[0] ) {
-					ri.Printf( PRINT_WARNING, "WARNING: R_FindImageFile could not find '%s' in shader '%s'\n", token, shader.name );
+					ri.Printf( PRINT_WARNING, "WARNING: R_FindImageFile could not find '%s'%s in shader '%s'%s\n", token, ri.VFS_Lang_FromVFSName(vfs), shader.name, ri.VFS_Lang_FromVFSName(shader.vfs) );
 					return qfalse;
 				}
 				bundle->isLightmap = qtrue;
@@ -1362,7 +1375,7 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, int *ifIndent )
 				ri.Printf( PRINT_WARNING, "WARNING: missing parameter for 'videoMap' keyword in shader '%s'\n", shader.name );
 				return qfalse;
 			}
-			bundle->videoMapHandle = ri.CIN_PlayCinematic( token, 0, 0, 256, 256, (CIN_loop | CIN_silent | CIN_shader));
+			bundle->videoMapHandle = ri.CIN_PlayCinematic( token, 0, 0, 256, 256, (CIN_loop | CIN_silent | CIN_shader), vfs );
 			if (bundle->videoMapHandle != -1) {
 				bundle->isVideoMap = qtrue;
 				bundle->image[0] = tr.scratchImage[bundle->videoMapHandle];
@@ -2223,11 +2236,11 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, int *ifIndent )
 			}
 
 			token = imageNames[currentBundle][i];
-			bundle->image[i] = R_FindImageFile( token, type, flags );
+			bundle->image[i] = R_FindImageFile( token, type, flags, vfs );
 
 			if ( !bundle->image[i] )
 			{
-				ri.Printf( PRINT_WARNING, "WARNING: R_FindImageFile could not find '%s' in shader '%s'\n", token, shader.name );
+				ri.Printf( PRINT_WARNING, "WARNING: R_FindImageFile could not find '%s'%s in shader '%s'%s\n", token, ri.VFS_Lang_FromVFSName(vfs), shader.name, ri.VFS_Lang_FromVFSName(shader.vfs) );
 				return qfalse;
 			}
 		}
@@ -2499,7 +2512,7 @@ ParseSkyParms
 skyParms <outerbox> <cloudheight> <innerbox>
 ===============
 */
-static void ParseSkyParms( char **text ) {
+static void ParseSkyParms( char **text, vfsNum_t vfs ) {
 	char		*token;
 	static char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
 	char		pathname[MAX_QPATH];
@@ -2519,7 +2532,7 @@ static void ParseSkyParms( char **text ) {
 		for (i=0 ; i<6 ; i++) {
 			Com_sprintf( pathname, sizeof(pathname), "%s_%s.tga"
 				, token, suf[i] );
-			shader.sky.outerbox[i] = R_FindImageFile( ( char * ) pathname, IMGTYPE_COLORALPHA, imgFlags | IMGFLAG_CLAMPTOEDGE );
+			shader.sky.outerbox[i] = R_FindImageFile( ( char * ) pathname, IMGTYPE_COLORALPHA, imgFlags | IMGFLAG_CLAMPTOEDGE, vfs );
 
 			if ( !shader.sky.outerbox[i] ) {
 				shader.sky.outerbox[i] = tr.defaultImage;
@@ -2550,7 +2563,7 @@ static void ParseSkyParms( char **text ) {
 		for (i=0 ; i<6 ; i++) {
 			Com_sprintf( pathname, sizeof(pathname), "%s_%s.tga"
 				, token, suf[i] );
-			shader.sky.innerbox[i] = R_FindImageFile( ( char * ) pathname, IMGTYPE_COLORALPHA, imgFlags );
+			shader.sky.innerbox[i] = R_FindImageFile( ( char * ) pathname, IMGTYPE_COLORALPHA, imgFlags, vfs );
 			if ( !shader.sky.innerbox[i] ) {
 				shader.sky.innerbox[i] = tr.defaultImage;
 			}
@@ -2657,7 +2670,7 @@ shader.  Parse it into the global shader variable.  Later functions
 will optimize it.
 =================
 */
-static qboolean ParseShader( char **text )
+static qboolean ParseShader( char **text, vfsNum_t vfs )
 {
 	char *token;
 	int s;
@@ -2713,7 +2726,7 @@ static qboolean ParseShader( char **text )
 
 			stage_ignore = qfalse;
 
-			if ( !ParseStage( &stages[s], text, &ifIndent ) )
+			if ( !ParseStage( &stages[s], text, &ifIndent, vfs ) )
 			{
 				return qfalse;
 			}
@@ -3047,7 +3060,7 @@ static qboolean ParseShader( char **text )
 		// skyparms <cloudheight> <outerbox> <innerbox>
 		else if ( !Q_stricmp( token, "skyparms" ) )
 		{
-			ParseSkyParms( text );
+			ParseSkyParms( text, vfs );
 			continue;
 		}
 		// skyfogvars ( <red> <green> <blue> ) <density>
@@ -3351,6 +3364,12 @@ static qboolean ParseShader( char **text )
 		// novlcollapse
 		else if ( !Q_stricmp( token, "novlcollapse" ) ) {
 			shader_novlcollapse = qtrue;
+			continue;
+		}
+		// used by Quake 3 Revolution
+		else if ( !Q_stricmp( token, "norelayer" ) ) {
+			// FIXME: No clue what this is supposed to do.
+			ri.Printf( PRINT_WARNING, "WARNING: unsearched general shader parameter 'norelayer' in '%s'\n", shader.name );
 			continue;
 		}
 		// unknown directive
@@ -3731,11 +3750,11 @@ static void CopyBundle( const textureBundle_t *from, textureBundle_t *to ) {
 
 static void CollapseStagesToLightall(shaderStage_t *diffuse, 
 	shaderStage_t *normal, shaderStage_t *specular, shaderStage_t *lightmap, 
-	qboolean useLightVector, qboolean useLightVertex, qboolean parallax, qboolean tcgen)
+	qboolean useLightVector, qboolean useLightVertex, qboolean parallax, qboolean tcgen, vfsNum_t vfs)
 {
 	int defs = 0;
 
-	//ri.Printf(PRINT_ALL, "shader %s has diffuse %s", shader.name, diffuse->bundle[0].image[0]->imgName);
+	//ri.Printf(PRINT_ALL, "shader %s%s has diffuse %s%s\n", shader.name, ri.VFS_Lang_FromVFSName(shader.vfs), diffuse->bundle[0].image[0]->imgName, ri.VFS_Lang_FromVFSName(diffuse->bundle[0].image[0]->vfs));
 
 	// reuse diffuse, mark others inactive
 	diffuse->type = ST_GLSL;
@@ -3794,7 +3813,7 @@ static void CollapseStagesToLightall(shaderStage_t *diffuse,
 			COM_StripExtension(diffuseImg->imgName, normalName, MAX_QPATH);
 			Q_strcat(normalName, MAX_QPATH, "_nh");
 
-			normalImg = R_FindImageFile(normalName, IMGTYPE_NORMALHEIGHT, normalFlags);
+			normalImg = R_FindImageFile(normalName, IMGTYPE_NORMALHEIGHT, normalFlags, vfs);
 
 			if (normalImg)
 			{
@@ -3804,7 +3823,7 @@ static void CollapseStagesToLightall(shaderStage_t *diffuse,
 			{
 				// try a normal image ("_n" suffix)
 				normalName[strlen(normalName) - 1] = '\0';
-				normalImg = R_FindImageFile(normalName, IMGTYPE_NORMAL, normalFlags);
+				normalImg = R_FindImageFile(normalName, IMGTYPE_NORMAL, normalFlags, vfs);
 			}
 
 			if (normalImg)
@@ -3838,7 +3857,7 @@ static void CollapseStagesToLightall(shaderStage_t *diffuse,
 			COM_StripExtension(diffuseImg->imgName, specularName, MAX_QPATH);
 			Q_strcat(specularName, MAX_QPATH, "_s");
 
-			specularImg = R_FindImageFile(specularName, IMGTYPE_COLORALPHA, specularFlags);
+			specularImg = R_FindImageFile(specularName, IMGTYPE_COLORALPHA, specularFlags, vfs);
 
 			if (specularImg)
 			{
@@ -3863,7 +3882,7 @@ static void CollapseStagesToLightall(shaderStage_t *diffuse,
 }
 
 
-static int CollapseStagesToGLSL(void)
+static int CollapseStagesToGLSL(vfsNum_t vfs)
 {
 	int i, j, numStages;
 	qboolean skip = qfalse;
@@ -4074,7 +4093,7 @@ static int CollapseStagesToGLSL(void)
 				vertexlit = qtrue;
 			}
 
-			CollapseStagesToLightall(diffuse, normal, specular, lightmap, diffuselit, vertexlit, parallax, tcgen);
+			CollapseStagesToLightall(diffuse, normal, specular, lightmap, diffuselit, vertexlit, parallax, tcgen, vfs);
 		}
 
 		// deactivate lightmap stages
@@ -4374,7 +4393,7 @@ static shader_t *GeneratePermanentShader( void ) {
 
 	SortNewShader();
 
-	hash = generateHashValue(newShader->name, FILE_HASH_SIZE);
+	hash = generateHashValue(newShader->name, FILE_HASH_SIZE, newShader->vfs);
 	newShader->next = hashTable[hash];
 	hashTable[hash] = newShader;
 
@@ -4602,7 +4621,7 @@ static void SetImplicitShaderStages( image_t *image ) {
 InitShader
 ===============
 */
-static void InitShader( const char *name, int lightmapIndex ) {
+static void InitShader( const char *name, int lightmapIndex, vfsNum_t vfs ) {
 	int i, b;
 
 	// clear the global shader
@@ -4611,6 +4630,7 @@ static void InitShader( const char *name, int lightmapIndex ) {
 
 	Q_strncpyz( shader.name, name, sizeof( shader.name ) );
 	shader.lightmapIndex = lightmapIndex;
+	shader.vfs = vfs;
 
 	for ( i = 0 ; i < MAX_SHADER_STAGES ; i++ ) {
 		for ( b = 0; b < NUM_TEXTURE_BUNDLES; b++ ) {
@@ -4660,7 +4680,7 @@ Returns a freshly allocated shader with all the needed info
 from the current global working shader
 =========================
 */
-static shader_t *FinishShader( void ) {
+static shader_t *FinishShader( vfsNum_t vfs ) {
 	int stage;
 	int bundle;
 	qboolean		hasLightmapStage;
@@ -4822,7 +4842,7 @@ static shader_t *FinishShader( void ) {
 	//
 	// look for multitexture potential
 	//
-	stage = CollapseStagesToGLSL();
+	stage = CollapseStagesToGLSL(shader.vfs);
 
 	if ( shader.lightmapIndex >= 0 && !hasLightmapStage ) {
 		if (vertexLightmap) {
@@ -4867,19 +4887,19 @@ return NULL if not found
 If found, it will return a valid shader
 =====================
 */
-static char *FindShaderInShaderText( const char *shadername ) {
+static char *FindShaderInShaderText( const char *shadername, vfsNum_t vfs ) {
 
 	char *token, *p;
 
 	int i, hash;
 
-	hash = generateHashValue(shadername, MAX_SHADERTEXT_HASH);
+	hash = generateHashValue(shadername, MAX_SHADERTEXT_HASH, vfs);
 
-	if(shaderTextHashTable[hash])
+	if(shaderTextHashTable[vfs][hash])
 	{
-		for (i = 0; shaderTextHashTable[hash][i]; i++)
+		for (i = 0; shaderTextHashTable[vfs][hash][i]; i++)
 		{
-			p = shaderTextHashTable[hash][i];
+			p = shaderTextHashTable[vfs][hash][i];
 			token = COM_ParseExt(&p, qtrue);
 		
 			if(!Q_stricmp(token, shadername))
@@ -4921,7 +4941,7 @@ Will always return a valid shader, but it might be the
 default shader if the real one can't be found.
 ==================
 */
-shader_t *R_FindShaderByName( const char *name ) {
+shader_t *R_FindShaderByName( const char *name, vfsNum_t vfs ) {
 	char		strippedName[MAX_QPATH];
 	int			hash;
 	shader_t	*sh;
@@ -4932,7 +4952,7 @@ shader_t *R_FindShaderByName( const char *name ) {
 
 	COM_StripExtension(name, strippedName, sizeof(strippedName));
 
-	hash = generateHashValue(strippedName, FILE_HASH_SIZE);
+	hash = generateHashValue(strippedName, FILE_HASH_SIZE, vfs);
 
 	//
 	// see if the shader is already loaded
@@ -4961,7 +4981,7 @@ an external lightmap image and/or sets the index to a valid number
 
 #define EXTERNAL_LIGHTMAP   "lm_%04d.tga"    // THIS MUST BE IN SYNC WITH Q3MAP2
 
-void R_FindLightmap( int *lightmapIndex ) {
+void R_FindLightmap( int *lightmapIndex, vfsNum_t vfs ) {
 	image_t     *image;
 	char fileName[ MAX_QPATH ];
 
@@ -4991,7 +5011,7 @@ void R_FindLightmap( int *lightmapIndex ) {
 
 	// attempt to load an external lightmap
 	Com_sprintf( fileName, sizeof (fileName), "%s/" EXTERNAL_LIGHTMAP, tr.worldDir, *lightmapIndex );
-	image = R_FindImageFile( fileName, IMGTYPE_COLORALPHA, IMGFLAG_LIGHTMAP | IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE );
+	image = R_FindImageFile( fileName, IMGTYPE_COLORALPHA, IMGFLAG_LIGHTMAP | IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, vfs );
 	if ( image == NULL ) {
 		*lightmapIndex = LIGHTMAP_BY_VERTEX;
 		return;
@@ -5034,7 +5054,7 @@ most world construction surfaces.
 
 ===============
 */
-shader_t *R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImageFlags ) {
+shader_t *R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImageFlags, vfsNum_t vfs ) {
 	char		strippedName[MAX_QPATH];
 	char		fileName[MAX_QPATH];
 	int			hash;
@@ -5051,11 +5071,11 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImage
 	}
 
 	// ydnar: validate lightmap index
-	R_FindLightmap( &lightmapIndex );
+	R_FindLightmap( &lightmapIndex, vfs );
 
 	COM_StripExtension(name, strippedName, sizeof(strippedName));
 
-	hash = generateHashValue(strippedName, FILE_HASH_SIZE);
+	hash = generateHashValue(strippedName, FILE_HASH_SIZE, vfs);
 
 	//
 	// see if the shader is already loaded
@@ -5066,13 +5086,13 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImage
 		// have to check all default shaders otherwise for every call to R_FindShader
 		// with that same strippedName a new default shader is created.
 		if ( (sh->lightmapIndex == lightmapIndex || sh->defaultShader) &&
-		     !Q_stricmp(sh->name, strippedName)) {
+		     !Q_stricmp(sh->name, strippedName) && sh->vfs == vfs) {
 			// match found
 			return sh;
 		}
 	}
 
-	InitShader( strippedName, lightmapIndex );
+	InitShader( strippedName, lightmapIndex, vfs );
 
 	shader_picmipFlag = IMGFLAG_PICMIP;
 	shader_novlcollapse = qfalse;
@@ -5093,7 +5113,7 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImage
 	//
 	// attempt to define shader from an explicit parameter file
 	//
-	shaderText = FindShaderInShaderText( strippedName );
+	shaderText = FindShaderInShaderText( strippedName, vfs );
 	if ( shaderText ) {
 		// enable this when building a pak file to get a global list
 		// of all explicit shaders
@@ -5101,10 +5121,10 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImage
 			ri.Printf( PRINT_ALL, "*SHADER* %s\n", name );
 		}
 
-		if ( !ParseShader( &shaderText ) ) {
+		if ( !ParseShader( &shaderText, vfs ) ) {
 			// had errors, so use default shader
 			shader.defaultShader = qtrue;
-			sh = FinishShader();
+			sh = FinishShader(vfs);
 			return sh;
 		}
 
@@ -5113,12 +5133,12 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImage
 
 			Q_strncpyz( storedAlias, aliasShader, sizeof ( storedAlias ) );
 
-			return R_FindShader( storedAlias, lightmapIndex, rawImageFlags );
+			return R_FindShader( storedAlias, lightmapIndex, rawImageFlags, vfs );
 		}
 
 		// allow implicit mappings
 		if ( implicitMap[ 0 ] == '\0' ) {
-			sh = FinishShader();
+			sh = FinishShader(vfs);
 			return sh;
 		}
 	}
@@ -5161,26 +5181,26 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImage
 		if (!shader_allowCompress)
 			flags |= IMGFLAG_NO_COMPRESSION;
 
-		image = R_FindImageFile( fileName, IMGTYPE_COLORALPHA, flags );
+		image = R_FindImageFile( fileName, IMGTYPE_COLORALPHA, flags, vfs );
 		if ( !image ) {
 			ri.Printf( PRINT_DEVELOPER, "Couldn't find image file for shader %s\n", name );
 			shader.defaultShader = qtrue;
-			return FinishShader();
+			return FinishShader(vfs);
 		}
 	}
 
 	// set default stages
 	SetImplicitShaderStages( image );
 
-	return FinishShader();
+	return FinishShader(vfs);
 }
 
 
-qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_t *image, qboolean mipRawImage) {
+qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_t *image, qboolean mipRawImage, vfsNum_t vfs) {
 	int			hash;
 	shader_t	*sh;
 
-	hash = generateHashValue(name, FILE_HASH_SIZE);
+	hash = generateHashValue(name, FILE_HASH_SIZE, vfs);
 
 	// probably not necessary since this function
 	// only gets called from tr_font.c with lightmapIndex == LIGHTMAP_2D
@@ -5199,18 +5219,18 @@ qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_
 		// with that same strippedName a new default shader is created.
 		if ( (sh->lightmapIndex == lightmapIndex || sh->defaultShader) &&
 			// index by name
-			!Q_stricmp(sh->name, name)) {
+			!Q_stricmp(sh->name, name) && sh->vfs == vfs) {
 			// match found
 			return sh->index;
 		}
 	}
 
-	InitShader( name, lightmapIndex );
+	InitShader( name, lightmapIndex, vfs );
 
 	// set default stages
 	SetImplicitShaderStages( image );
 
-	sh = FinishShader();
+	sh = FinishShader(vfs);
   return sh->index; 
 }
 
@@ -5223,7 +5243,7 @@ This is the exported shader entry point for the rest of the system
 It will always return an index that will be valid.
 ====================
 */
-qhandle_t RE_RegisterShaderEx( const char *name, int lightmapIndex, qboolean mipRawImage ) {
+qhandle_t RE_RegisterShaderEx( const char *name, int lightmapIndex, qboolean mipRawImage, vfsNum_t vfs ) {
 	shader_t	*sh;
 
 	if ( strlen( name ) >= MAX_QPATH ) {
@@ -5231,7 +5251,7 @@ qhandle_t RE_RegisterShaderEx( const char *name, int lightmapIndex, qboolean mip
 		return 0;
 	}
 
-	sh = R_FindShader( name, lightmapIndex, mipRawImage ? ( IMGFLAG_MIPMAP | IMGFLAG_PICMIP ) : IMGFLAG_CLAMPTOEDGE );
+	sh = R_FindShader( name, lightmapIndex, mipRawImage ? ( IMGFLAG_MIPMAP | IMGFLAG_PICMIP ) : IMGFLAG_CLAMPTOEDGE, vfs );
 
 	// we want to return 0 if the shader failed to
 	// load for some reason, but R_FindShader should
@@ -5257,8 +5277,8 @@ This should really only be used for explicit shaders, because there is no
 way to ask for different implicit lighting modes (vertex, lightmap, etc)
 ====================
 */
-qhandle_t RE_RegisterShader( const char *name ) {
-	return RE_RegisterShaderEx( name, LIGHTMAP_2D, qtrue );
+qhandle_t RE_RegisterShader( const char *name, vfsNum_t vfs ) {
+	return RE_RegisterShaderEx( name, LIGHTMAP_2D, qtrue, vfs );
 }
 
 
@@ -5269,8 +5289,8 @@ RE_RegisterShaderNoMip
 For menu graphics that should never be picmiped and not have mipmaps
 ====================
 */
-qhandle_t RE_RegisterShaderNoMip( const char *name ) {
-	return RE_RegisterShaderEx( name, LIGHTMAP_2D, qfalse );
+qhandle_t RE_RegisterShaderNoMip( const char *name, vfsNum_t vfs ) {
+	return RE_RegisterShaderEx( name, LIGHTMAP_2D, qfalse, vfs );
 }
 
 /*
@@ -5280,7 +5300,7 @@ RE_RegisterShaderNoPicMip
 For menu graphics that should never be picmiped but will have mipmaps
 ====================
 */
-qhandle_t RE_RegisterShaderNoPicMip( const char *name ) {
+qhandle_t RE_RegisterShaderNoPicMip( const char *name, vfsNum_t vfs ) {
 	shader_t	*sh;
 
 	if ( strlen( name ) >= MAX_QPATH ) {
@@ -5288,7 +5308,7 @@ qhandle_t RE_RegisterShaderNoPicMip( const char *name ) {
 		return 0;
 	}
 
-	sh = R_FindShader( name, LIGHTMAP_2D, IMGFLAG_MIPMAP | IMGFLAG_CLAMPTOEDGE );
+	sh = R_FindShader( name, LIGHTMAP_2D, IMGFLAG_MIPMAP | IMGFLAG_CLAMPTOEDGE, vfs );
 
 	// we want to return 0 if the shader failed to
 	// load for some reason, but R_FindShader should
@@ -5396,7 +5416,8 @@ a single large text block that can be scanned for shader names
 =====================
 */
 #define	MAX_SHADER_FILES	4096
-static void ScanAndLoadShaderFiles( void )
+//TODO: Prevent this from clobbering previously loaded shaders.
+static void ScanAndLoadShaderFiles( vfsNum_t vfs )
 {
 	char **shaderFiles;
 	char *buffers[MAX_SHADER_FILES] = {NULL};
@@ -5404,17 +5425,17 @@ static void ScanAndLoadShaderFiles( void )
 	int numShaderFiles;
 	int i;
 	char *oldp, *token, *hashMem, *textEnd;
-	int shaderTextHashTableSizes[MAX_SHADERTEXT_HASH], hash, size;
+	int shaderTextHashTableSizes[VFS_MAX][MAX_SHADERTEXT_HASH], hash, size;
 	char shaderName[MAX_QPATH];
 	int shaderLine;
 
 	long sum = 0, summand;
 	// scan for shader files
-	shaderFiles = ri.FS_ListFiles( r_shadersDirectory->string, ".shader", &numShaderFiles );
+	shaderFiles = ri.FS_ListFiles_VFS( r_shadersDirectory->string, ".shader", &numShaderFiles, vfs );
 
 	if ( !shaderFiles || !numShaderFiles )
 	{
-		ri.Printf( PRINT_WARNING, "WARNING: no shader files found\n" );
+		ri.Printf( PRINT_WARNING, "WARNING: no shader files found for %s\n", ri.VFS_StringFromNum(vfs) );
 		return;
 	}
 
@@ -5436,17 +5457,17 @@ static void ScanAndLoadShaderFiles( void )
 				strcpy(ext, ".mtr");
 			}
 
-			if ( ri.FS_ReadFile( filename, NULL ) <= 0 )
+			if ( ri.FS_ReadFile_VFS( filename, NULL, vfs ) <= 0 )
 			{
 				Com_sprintf( filename, sizeof( filename ), "%s/%s", r_shadersDirectory->string, shaderFiles[i] );
 			}
 		}
 		
-		ri.Printf( PRINT_DEVELOPER, "...loading '%s'\n", filename );
-		summand = ri.FS_ReadFile( filename, (void **)&buffers[i] );
+		ri.Printf( PRINT_DEVELOPER, "...loading '%s'%s\n", filename, ri.VFS_Lang_FromVFSName(vfs) );
+		summand = ri.FS_ReadFile_VFS( filename, (void **)&buffers[i], vfs );
 		
 		if ( !buffers[i] )
-			ri.Error( ERR_DROP, "Couldn't load %s", filename );
+			ri.Error( ERR_DROP, "Couldn't load %s%s", filename, ri.VFS_Lang_FromVFSName(vfs) );
 		
 		// Do a simple check on the shader structure in that file to make sure one bad shader file cannot fuck up all other shaders.
 		p = buffers[i];
@@ -5464,8 +5485,8 @@ static void ScanAndLoadShaderFiles( void )
 			token = COM_ParseExt(&p, qtrue);
 			if(token[0] != '{' || token[1] != '\0')
 			{
-				ri.Printf(PRINT_WARNING, "WARNING: Ignoring shader file %s. Shader \"%s\" on line %d missing opening brace",
-							filename, shaderName, shaderLine);
+				ri.Printf(PRINT_WARNING, "WARNING: Ignoring shader file %s%s. Shader \"%s\" on line %d missing opening brace",
+							filename, ri.VFS_Lang_FromVFSName(vfs), shaderName, shaderLine);
 				if (token[0])
 				{
 					ri.Printf(PRINT_WARNING, " (found \"%s\" on line %d)", token, COM_GetCurrentParseLine());
@@ -5478,8 +5499,8 @@ static void ScanAndLoadShaderFiles( void )
 
 			if(!SkipBracedSection(&p, 1))
 			{
-				ri.Printf(PRINT_WARNING, "WARNING: Ignoring shader file %s. Shader \"%s\" on line %d missing closing brace.\n",
-							filename, shaderName, shaderLine);
+				ri.Printf(PRINT_WARNING, "WARNING: Ignoring shader file %s%s. Shader \"%s\" on line %d missing closing brace.\n",
+							filename, ri.VFS_Lang_FromVFSName(vfs), shaderName, shaderLine);
 				ri.FS_FreeFile(buffers[i]);
 				buffers[i] = NULL;
 				break;
@@ -5524,8 +5545,8 @@ static void ScanAndLoadShaderFiles( void )
 			break;
 		}
 
-		hash = generateHashValue(token, MAX_SHADERTEXT_HASH);
-		shaderTextHashTableSizes[hash]++;
+		hash = generateHashValue(token, MAX_SHADERTEXT_HASH, vfs);
+		shaderTextHashTableSizes[vfs][hash]++;
 		size++;
 		SkipBracedSection(&p, 0);
 	}
@@ -5535,8 +5556,8 @@ static void ScanAndLoadShaderFiles( void )
 	hashMem = ri.Hunk_Alloc( size * sizeof(char *), h_low );
 
 	for (i = 0; i < MAX_SHADERTEXT_HASH; i++) {
-		shaderTextHashTable[i] = (char **) hashMem;
-		hashMem = ((char *) hashMem) + ((shaderTextHashTableSizes[i] + 1) * sizeof(char *));
+		shaderTextHashTable[vfs][i] = (char **) hashMem;
+		hashMem = ((char *) hashMem) + ((shaderTextHashTableSizes[vfs][i] + 1) * sizeof(char *));
 	}
 
 	Com_Memset(shaderTextHashTableSizes, 0, sizeof(shaderTextHashTableSizes));
@@ -5550,8 +5571,8 @@ static void ScanAndLoadShaderFiles( void )
 			break;
 		}
 
-		hash = generateHashValue(token, MAX_SHADERTEXT_HASH);
-		shaderTextHashTable[hash][shaderTextHashTableSizes[hash]++] = oldp;
+		hash = generateHashValue(token, MAX_SHADERTEXT_HASH, vfs);
+		shaderTextHashTable[vfs][hash][shaderTextHashTableSizes[vfs][hash]++] = oldp;
 
 		SkipBracedSection(&p, 0);
 	}
@@ -5566,32 +5587,32 @@ static void ScanAndLoadShaderFiles( void )
 CreateInternalShaders
 ====================
 */
-static void CreateInternalShaders( void ) {
+static void CreateInternalShaders( vfsNum_t vfs ) {
 	tr.numShaders = 0;
 
 	// init the default shader
-	InitShader( "<default>", LIGHTMAP_NONE );
+	InitShader( "<default>", LIGHTMAP_NONE, vfs );
 	stages[0].bundle[0].image[0] = tr.defaultImage;
 	stages[0].active = qtrue;
 	stages[0].stateBits = GLS_DEFAULT;
-	tr.defaultShader = FinishShader();
+	tr.defaultShader = FinishShader(vfs);
 
 	// used for skins for disable surfaces
 	Q_strncpyz( shader.name, "nodraw", sizeof( shader.name ) );
-	tr.nodrawShader = FinishShader();
+	tr.nodrawShader = FinishShader(vfs);
 
 	// shadow shader is just a marker
 	Q_strncpyz( shader.name, "<stencil shadow>", sizeof( shader.name ) );
 	shader.sort = SS_STENCIL_SHADOW;
-	tr.shadowShader = FinishShader();
+	tr.shadowShader = FinishShader(vfs);
 }
 
-static void CreateExternalShaders( void ) {
-	tr.projectionShadowShader = R_FindShader( "projectionShadow", LIGHTMAP_NONE, MIP_RAW_IMAGE );
-	tr.flareShader = R_FindShader( "flareShader", LIGHTMAP_NONE, MIP_RAW_IMAGE );
+static void CreateExternalShaders( vfsNum_t vfs ) {
+	tr.projectionShadowShader = R_FindShader( "projectionShadow", LIGHTMAP_NONE, MIP_RAW_IMAGE, vfs );
+	tr.flareShader = R_FindShader( "flareShader", LIGHTMAP_NONE, MIP_RAW_IMAGE, vfs );
 	tr.sunShader = NULL;
 
-	tr.sunFlareShader = R_FindShader( "gfx/2d/sunflare", LIGHTMAP_NONE, MIP_RAW_IMAGE );
+	tr.sunFlareShader = R_FindShader( "gfx/2d/sunflare", LIGHTMAP_NONE, MIP_RAW_IMAGE, vfs );
 
 	// HACK: if sunflare is missing, make one using the flare image or dlight image
 	if (tr.sunFlareShader->defaultShader)
@@ -5603,11 +5624,11 @@ static void CreateExternalShaders( void ) {
 		else
 			image = tr.dlightImage;
 
-		InitShader( "gfx/2d/sunflare", LIGHTMAP_NONE );
+		InitShader( "gfx/2d/sunflare", LIGHTMAP_NONE, vfs );
 		stages[0].bundle[0].image[0] = image;
 		stages[0].active = qtrue;
 		stages[0].stateBits = GLS_DEFAULT;
-		tr.sunFlareShader = FinishShader();
+		tr.sunFlareShader = FinishShader(vfs);
 	}
 
 }
@@ -5618,15 +5639,20 @@ R_InitShaders
 ==================
 */
 void R_InitShaders( void ) {
+	vfsNum_t vfs;
 	ri.Printf(PRINT_DEVELOPER, "Initializing Shaders\n");
 
 	Com_Memset(hashTable, 0, sizeof(hashTable));
 
-	CreateInternalShaders();
+	CreateInternalShaders( VFS_DEFAULT );
 
-	ScanAndLoadShaderFiles();
+	for (vfs = VFS_DEFAULT; vfs < VFS_MAX; vfs++) {
+		if (ri.VFS_Initialized(vfs)) {
+			ScanAndLoadShaderFiles( vfs );
+		}
+	}
 
-	CreateExternalShaders();
+	CreateExternalShaders( VFS_DEFAULT );
 }
 
 /*
@@ -5634,10 +5660,10 @@ void R_InitShaders( void ) {
 R_InitExternalShaders
 ==================
 */
-void R_InitExternalShaders( void ) {
+void R_InitExternalShaders( vfsNum_t vfs ) {
 	if ( !tr.sunShaderName[0] ) {
 		Q_strncpyz( tr.sunShaderName, "sun", sizeof ( tr.sunShaderName ) );
 	}
 
-	tr.sunShader = R_FindShader( tr.sunShaderName, LIGHTMAP_NONE, MIP_RAW_IMAGE );
+	tr.sunShader = R_FindShader( tr.sunShaderName, LIGHTMAP_NONE, MIP_RAW_IMAGE, vfs );
 }

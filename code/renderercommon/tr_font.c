@@ -634,7 +634,7 @@ float readFloat( void ) {
 R_LoadPreRenderedFont
 ===============
 */
-qboolean R_LoadPreRenderedFont( const char *datName, int pointSize, fontInfo_t *font ) {
+qboolean R_LoadPreRenderedFont( const char *datName, int pointSize, fontInfo_t *font, vfsNum_t vfs ) {
 	typedef struct {
 		glyphInfo_t	glyphs [GLYPHS_PER_FONT];
 		float		glyphScale;
@@ -644,13 +644,13 @@ qboolean R_LoadPreRenderedFont( const char *datName, int pointSize, fontInfo_t *
 	int			len;
 	int			i;
 
-	len = ri.FS_ReadFile(datName, NULL);
+	len = ri.FS_ReadFile_VFS(datName, NULL, vfs);
 	if (len == sizeof(teamArenaFontInfo_t)) {
 		if (registeredFontCount >= MAX_FONTS) {
 			ri.Printf(PRINT_WARNING, "RE_RegisterFont: No free slot to load font file '%s'\n", datName);
 			return qfalse;
 		}
-		ri.FS_ReadFile(datName, &faceData);
+		ri.FS_ReadFile_VFS(datName, &faceData, vfs );
 		fdOffset = 0;
 		fdFile = faceData;
 		for(i=0; i<GLYPHS_PER_FONT; i++) {
@@ -679,7 +679,7 @@ qboolean R_LoadPreRenderedFont( const char *datName, int pointSize, fontInfo_t *
 //		Com_Memcpy(font, faceData, sizeof(fontInfo_t));
 		Q_strncpyz(font->name, datName, sizeof(font->name));
 		for (i = GLYPH_START; i <= GLYPH_END; i++) {
-			font->glyphs[i].glyph = RE_RegisterShaderNoPicMip(font->glyphs[i].shaderName);
+			font->glyphs[i].glyph = RE_RegisterShaderNoPicMip(font->glyphs[i].shaderName, vfs);
 		}
 
 		// Team Arena's fonts don't have character 255,
@@ -698,7 +698,7 @@ qboolean R_LoadPreRenderedFont( const char *datName, int pointSize, fontInfo_t *
 			ri.Printf(PRINT_WARNING, "RE_RegisterFont: No free slot to load font file '%s'\n", datName);
 			return qfalse;
 		}
-		ri.FS_ReadFile(datName, &faceData);
+		ri.FS_ReadFile_VFS(datName, &faceData, vfs);
 		fdOffset = 0;
 		fdFile = faceData;
 		for(i=0; i<GLYPHS_PER_FONT; i++) {
@@ -728,7 +728,7 @@ qboolean R_LoadPreRenderedFont( const char *datName, int pointSize, fontInfo_t *
 //		Com_Memcpy(font, faceData, sizeof(fontInfo_t));
 		Q_strncpyz(font->name, datName, sizeof(font->name));
 		for (i = GLYPH_START; i <= GLYPH_END; i++) {
-			font->glyphs[i].glyph = RE_RegisterShaderNoPicMip(font->glyphs[i].shaderName);
+			font->glyphs[i].glyph = RE_RegisterShaderNoPicMip(font->glyphs[i].shaderName, vfs);
 		}
 		Com_Memcpy(&registeredFont[registeredFontCount++], font, sizeof(fontInfo_t));
 		ri.FS_FreeFile(faceData);
@@ -880,7 +880,7 @@ R_LoadDynamicFont
 Load an outline/bitmap font using Freetype for the current game window resolution.
 ===============
 */
-qboolean R_LoadDynamicFont( const char *fontName, int pointSize, float borderWidth, qboolean forceAutoHint, fontInfo_t *font ) {
+qboolean R_LoadDynamicFont( const char *fontName, int pointSize, float borderWidth, qboolean forceAutoHint, fontInfo_t *font, vfsNum_t vfs ) {
 	FT_Face		face;
 	int			j, k, xOut, yOut, lastStart, imageNumber;
 	int			scaledSize, rowHeight;
@@ -908,7 +908,7 @@ qboolean R_LoadDynamicFont( const char *fontName, int pointSize, float borderWid
 	COM_StripExtension( fontName, strippedName, sizeof ( strippedName ) );
 
 	if (registeredFontCount >= MAX_FONTS) {
-		len = ri.FS_ReadFile(fontName, NULL);
+		len = ri.FS_ReadFile_VFS(fontName, NULL, vfs);
 		if (len <= 0) {
 			ri.Printf(PRINT_DEVELOPER, "RE_RegisterFont: Unable to read font file '%s'\n", fontName);
 		} else {
@@ -917,7 +917,7 @@ qboolean R_LoadDynamicFont( const char *fontName, int pointSize, float borderWid
 		return qfalse;
 	}
 
-	len = ri.FS_ReadFile(fontName, &faceData);
+	len = ri.FS_ReadFile_VFS(fontName, &faceData, vfs);
 	if (!faceData) {
 		ri.Printf(PRINT_DEVELOPER, "RE_RegisterFont: Unable to read font file '%s'\n", fontName);
 		return qfalse;
@@ -1076,12 +1076,12 @@ qboolean R_LoadDynamicFont( const char *fontName, int pointSize, float borderWid
 			} else {
 				Com_sprintf(imageName, sizeof(imageName), "%s_%i_%i.tga", strippedName, imageNumber++, pointSize);
 			}
-			if(r_saveFontData->integer && !ri.FS_FileExists(imageName)) {
+			if(r_saveFontData->integer && !ri.FS_FileExists_VFS(imageName, VFS_DEFAULT)) {
 				WriteTGA(imageName, out, imageSize, saveHeight);
 			}
 
-			image = R_CreateImage(imageName, out, imageSize, saveHeight, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE|IMGFLAG_MIPMAP, 0 );
-			h = RE_RegisterShaderFromImage(imageName, LIGHTMAP_2D, image, qfalse);
+			image = R_CreateImage(imageName, out, imageSize, saveHeight, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE|IMGFLAG_MIPMAP, 0, vfs );
+			h = RE_RegisterShaderFromImage(imageName, LIGHTMAP_2D, image, qfalse, vfs);
 			for (j = lastStart; j < i; j++) {
 				font->glyphs[j].glyph = h;
 				COM_StripExtension(imageName, font->glyphs[j].shaderName, sizeof(font->glyphs[j].shaderName));
@@ -1148,6 +1148,7 @@ R_GetFont
 Get already registered font or load a dynamic font or a pre-rendered legacy font.
 ==================
 */
+// TODO: Allow loading fonts from VFSs
 static qboolean R_GetFont(const char *name, int pointSize, float borderWidth, qboolean forceAutoHint, fontInfo_t *font) {
 	int			i;
 	char		strippedName[MAX_QPATH];
@@ -1157,6 +1158,7 @@ static qboolean R_GetFont(const char *name, int pointSize, float borderWidth, qb
 	char		*fontExts[] = { "ttf", "otf", "ttc", "otc", "fon", NULL };
 	const char	*ext;
 #endif
+	vfsNum_t	vfs = VFS_DEFAULT;
 
 	COM_StripExtension( name, strippedName, sizeof ( strippedName ) );
 	if ( borderWidth != 0 ) {
@@ -1182,7 +1184,7 @@ static qboolean R_GetFont(const char *name, int pointSize, float borderWidth, qb
 				continue;
 			}
 
-			if ( R_LoadDynamicFont( name, pointSize, borderWidth, forceAutoHint, font ) ) {
+			if ( R_LoadDynamicFont( name, pointSize, borderWidth, forceAutoHint, font, vfs ) ) {
 				return qtrue;
 			}
 			break;
@@ -1197,13 +1199,13 @@ static qboolean R_GetFont(const char *name, int pointSize, float borderWidth, qb
 
 		Com_sprintf( altName, sizeof (altName), "%s.%s", strippedName, fontExts[i] );
 
-		if ( R_LoadDynamicFont( altName, pointSize, borderWidth, forceAutoHint, font ) ) {
+		if ( R_LoadDynamicFont( altName, pointSize, borderWidth, forceAutoHint, font, vfs ) ) {
 			return qtrue;
 		}
 	}
 #endif
 
-	if ( R_LoadPreRenderedFont( datName, pointSize, font ) ) {
+	if ( R_LoadPreRenderedFont( datName, pointSize, font, vfs ) ) {
 		return qtrue;
 	}
 
@@ -1220,7 +1222,7 @@ static qboolean R_GetFont(const char *name, int pointSize, float borderWidth, qb
 			}
 		}
 
-		if ( R_LoadPreRenderedFont( datName, pointSize, font ) ) {
+		if ( R_LoadPreRenderedFont( datName, pointSize, font, vfs ) ) {
 			return qtrue;
 		}
 	}

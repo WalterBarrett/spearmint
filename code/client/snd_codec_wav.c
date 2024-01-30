@@ -203,13 +203,13 @@ snd_codec_t wav_codec =
 S_WAV_CodecLoad
 =================
 */
-void *S_WAV_CodecLoad(const char *filename, snd_info_t *info)
+void *S_WAV_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs)
 {
 	fileHandle_t file;
 	void *buffer;
 
 	// Try to open the file
-	FS_FOpenFileRead(filename, &file, qtrue);
+	FS_FOpenFileRead_VFS(filename, &file, qtrue, vfs);
 	if(!file)
 	{
 		return NULL;
@@ -248,12 +248,12 @@ void *S_WAV_CodecLoad(const char *filename, snd_info_t *info)
 S_WAV_CodecOpenStream
 =================
 */
-snd_stream_t *S_WAV_CodecOpenStream(const char *filename)
+snd_stream_t *S_WAV_CodecOpenStream(const char *filename, vfsNum_t vfs)
 {
 	snd_stream_t *rv;
 
 	// Open
-	rv = S_CodecUtilOpen(filename, &wav_codec);
+	rv = S_CodecUtilOpen(filename, &wav_codec, vfs);
 	if(!rv)
 		return NULL;
 

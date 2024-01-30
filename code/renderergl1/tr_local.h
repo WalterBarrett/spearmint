@@ -374,6 +374,7 @@ typedef struct {
 
 typedef struct shader_s {
 	char		name[MAX_QPATH];		// game path, including extension
+	vfsNum_t	vfs;
 	int			lightmapIndex;			// for a shader to match, both name and lightmapIndex must match
 
 	int			index;					// this shader == tr.shaders[index]
@@ -848,6 +849,7 @@ typedef struct {
 typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
+	vfsNum_t	vfs;
 
 	int			dataSize;
 
@@ -922,6 +924,7 @@ typedef struct model_s {
 	void	*modelData;			// only if type == (MOD_TAN | MOD_MDR | MOD_MDS | MOD_MDM | MOD_MDX | MOD_IQM)
 
 	int			 numLods;
+	vfsNum_t	vfs;
 } model_t;
 
 
@@ -1404,7 +1407,7 @@ void		RE_BeginFrame( stereoFrame_t stereoFrame );
 void		RE_BeginRegistration( glconfig_t *glconfig );
 void		RE_LoadWorldMap( const bspFile_t *bsp );
 void		RE_SetWorldVisData( const byte *vis );
-qhandle_t	RE_RegisterModel( const char *name );
+qhandle_t	RE_RegisterModel( const char *name, vfsNum_t vfs );
 qhandle_t	RE_RegisterSkin( const char *name );
 qhandle_t	RE_AllocSkinSurface( const char *surface, qhandle_t hShader );
 void		RE_Shutdown( qboolean destroyWindow );
@@ -1447,18 +1450,20 @@ const void *RB_TakeVideoFrameCmd( const void *data );
 //
 // tr_shader.c
 //
-shader_t	*R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImageFlags );
+shader_t	*R_FindShader( const char *name, int lightmapIndex, imgFlags_t rawImageFlags, vfsNum_t vfs );
 shader_t	*R_GetShaderByHandle( qhandle_t hShader );
 shader_t	*R_GetShaderByState( int index, long *cycleTime );
-shader_t *R_FindShaderByName( const char *name );
+shader_t	*R_FindShaderByName( const char *name, vfsNum_t vfs );
 void		R_InitShaders( void );
-void		R_InitExternalShaders( void );
+void		R_InitExternalShaders( vfsNum_t vfs );
 void		R_ShaderList_f( void );
-void    R_RemapShader(const char *oldShader, const char *newShader, const char *timeOffset);
-void		RE_SetSurfaceShader( int surfaceNum, const char *name );
-qhandle_t	RE_GetSurfaceShader( int surfaceNum, int withlightmap );
+void    	R_RemapShader(const char *oldShader, const char *newShader, const char *timeOffset, vfsNum_t vfs, vfsNum_t newVfs);
+void		*RE_GetShaderTable( void );
+void		RE_SetSurfaceShader( int surfaceNum, const char *name, vfsNum_t vfs );
+qhandle_t	RE_GetSurfaceShader( int surfaceNum, int withlightmap, vfsNum_t vfs );
 qhandle_t	RE_GetShaderFromModel( qhandle_t hModel, int surfnum, int withlightmap );
 void		RE_GetShaderName( qhandle_t hShader, char *buffer, int bufferSize );
+int			RE_GetShaderVFS( qhandle_t hShader );
 
 /*
 ====================================================================

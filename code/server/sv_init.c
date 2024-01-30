@@ -702,7 +702,7 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	Cvar_Set( "sv_referencedPakNames", p );
 
 	// set the game title so client can create description.txt
-	if ( !Q_stricmp( com_productName->string, FS_GetCurrentGameDir() ) ) {
+	if ( !Q_stricmp( com_productName->string, FS_GetCurrentGameDir(VFS_DEFAULT) ) ) {
 		Cvar_Set( "sv_gameTitle", "" );
 	} else {
 		Cvar_Set( "sv_gameTitle", com_productName->string );

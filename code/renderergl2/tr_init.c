@@ -779,7 +779,7 @@ void R_ScreenShotTGA_f (void) {
 		for ( ; lastNumber <= 9999 ; lastNumber++ ) {
 			R_ScreenshotFilename( lastNumber, checkname, ".tga" );
 
-      if (!ri.FS_FileExists( checkname ))
+      if (!ri.FS_FileExists_VFS( checkname, VFS_DEFAULT ))
       {
         break; // file doesn't exist
       }
@@ -837,7 +837,7 @@ void R_ScreenShotJPEG_f (void) {
 		for ( ; lastNumber <= 9999 ; lastNumber++ ) {
 			R_ScreenshotFilename( lastNumber, checkname, ".jpg" );
 
-      if (!ri.FS_FileExists( checkname ))
+      if (!ri.FS_FileExists_VFS( checkname, VFS_DEFAULT ))
       {
         break; // file doesn't exist
       }
@@ -895,7 +895,7 @@ void R_ScreenShotPNG_f (void) {
 		for ( ; lastNumber <= 9999 ; lastNumber++ ) {
 			R_ScreenshotFilename( lastNumber, checkname, ".png" );
 
-      if (!ri.FS_FileExists( checkname ))
+      if (!ri.FS_FileExists_VFS( checkname, VFS_DEFAULT ))
       {
         break; // file doesn't exist
       }
@@ -1790,6 +1790,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp, qboolean headless ) 
 	re.GetSurfaceShader = RE_GetSurfaceShader;
 	re.GetShaderFromModel = RE_GetShaderFromModel;
 	re.GetShaderName = RE_GetShaderName;
+	re.GetShaderVFS = RE_GetShaderVFS;
 
 	return &re;
 }

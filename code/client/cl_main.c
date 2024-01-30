@@ -827,7 +827,7 @@ void CL_Record_f( void ) {
 	Com_Printf ("recording to %s.\n", name);
 	clc.demofile = FS_FOpenFileWrite( name );
 	if ( !clc.demofile ) {
-		Com_Printf ("ERROR: couldn't open.\n");
+		Com_Printf ("ERROR: couldn't open %s.\n", name);
 		return;
 	}
 	clc.demorecording = qtrue;
@@ -2286,6 +2286,8 @@ void CL_BeginDownload( const char *localName, const char *remoteName ) {
 				"Remotename: %s\n"
 				"****************************\n", localName, remoteName);
 
+	// TODO: Make this extVFS-aware:
+
 	Q_strncpyz ( clc.downloadName, localName, sizeof(clc.downloadName) );
 	Com_sprintf( clc.downloadTempName, sizeof(clc.downloadTempName), "%s.tmp", localName );
 
@@ -2317,6 +2319,7 @@ void CL_NextDownload(void)
 	// A download has finished, check whether this matches a referenced checksum
 	if(*clc.downloadName)
 	{
+		// TODO: Make sure fs_homepath works with the extended VFS concept.
 		char *zippath = FS_BuildOSPath(Cvar_VariableString("fs_homepath"), clc.downloadName, "");
 		zippath[strlen(zippath)-1] = '\0';
 
@@ -2410,6 +2413,7 @@ After receiving a valid game state, we valid the cgame and local zip files here
 and determine if we need to download them
 =================
 */
+// TODO: Fix this.
 void CL_InitDownloads(void) {
 	char missingfiles[1024];
 
@@ -3221,6 +3225,7 @@ void CL_DrawLoadingScreenFrame( stereoFrame_t stereoFrame, qhandle_t hShader, ve
 CL_DrawLoadingScreen
 ============
 */
+// TODO: Allow specifying the VFS of loading screens.
 void CL_DrawLoadingScreen( void ) {
 	int screenNum;
 	loadingScreen_t	*screen;
@@ -3241,7 +3246,7 @@ void CL_DrawLoadingScreen( void ) {
 
 	screen = &com_gameConfig.loadingScreens[screenNum];
 
-	hShader = re.RegisterShaderNoMip( screen->shaderName );
+	hShader = re.RegisterShaderNoMip( screen->shaderName, VFS_DEFAULT );
 
 	VectorCopy( screen->color, color );
 	color[3] = 1.0f;
@@ -3270,7 +3275,7 @@ void CL_InitRenderer( void ) {
 	// this sets up the renderer and calls R_Init
 	re.BeginRegistration( &cls.glconfig );
 
-	cls.whiteShader = re.RegisterShader( "white" );
+	cls.whiteShader = re.RegisterShader( "white", VFS_DEFAULT );
 
 	// draw loading screen when the game is starting up
 	if (!cls.drawnLoadingScreen) {
@@ -3370,6 +3375,13 @@ void CL_InitRef( void ) {
 
 	ri.Sys_GLimpSafeInit = Sys_GLimpSafeInit;
 	ri.Sys_GLimpInit = Sys_GLimpInit;
+
+	ri.VFS_Initialized = VFS_Initialized;
+	ri.VFS_StringFromNum = VFS_StringFromNum;
+	ri.VFS_NumFromString = VFS_NumFromString;
+	ri.FS_GetQPathAndVFS = FS_GetQPathAndVFS;
+	ri.FS_GetShaderTokenAndVFS = FS_GetShaderTokenAndVFS;
+	ri.VFS_Lang_FromVFSName = VFS_Lang_FromVFSName;
 
 	Com_InitRef(&ri);
 

@@ -366,10 +366,10 @@ void S_StartLocalSound( sfxHandle_t sfx, int channelNum )
 S_StartBackgroundTrack
 =================
 */
-void S_StartBackgroundTrack( const char *intro, const char *loop, float volume, float loopVolume )
+void S_StartBackgroundTrack( const char *intro, const char *loop, float volume, float loopVolume, vfsNum_t introVfs, vfsNum_t loopVfs )
 {
 	if( si.StartBackgroundTrack ) {
-		si.StartBackgroundTrack( intro, loop, volume, loopVolume );
+		si.StartBackgroundTrack( intro, loop, volume, loopVolume, introVfs, loopVfs );
 	}
 }
 
@@ -390,10 +390,10 @@ void S_StopBackgroundTrack( void )
 S_StartStreamingSound
 =================
 */
-void S_StartStreamingSound( int stream, int entityNum, const char *filename, float volume )
+void S_StartStreamingSound( int stream, int entityNum, const char *filename, float volume, vfsNum_t vfs )
 {
 	if(si.StartStreamingSound)
-		si.StartStreamingSound(stream, entityNum, filename, volume);
+		si.StartStreamingSound(stream, entityNum, filename, volume, vfs);
 }
 
 /*
@@ -412,10 +412,10 @@ void S_StopStreamingSound( int stream )
 S_QueueStreamingSound
 =================
 */
-void S_QueueStreamingSound( int stream, const char *filename, float volume )
+void S_QueueStreamingSound( int stream, const char *filename, float volume, vfsNum_t vfs )
 {
 	if(si.QueueStreamingSound)
-		si.QueueStreamingSound(stream, filename, volume);
+		si.QueueStreamingSound(stream, filename, volume, vfs);
 }
 
 /*
@@ -601,10 +601,10 @@ void S_BeginRegistration( void )
 S_RegisterSound
 =================
 */
-sfxHandle_t	S_RegisterSound( const char *sample, qboolean compressed )
+sfxHandle_t	S_RegisterSound( const char *sample, qboolean compressed, vfsNum_t vfs )
 {
 	if( si.RegisterSound ) {
-		return si.RegisterSound( sample, compressed );
+		return si.RegisterSound( sample, compressed, vfs );
 	} else {
 		return 0;
 	}

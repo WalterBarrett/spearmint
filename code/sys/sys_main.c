@@ -328,7 +328,7 @@ static __attribute__ ((noreturn)) void Sys_Exit( int exitCode )
 	if( exitCode < 2 && com_fullyInitialized )
 	{
 		// Normal exit
-		Sys_RemovePIDFile( FS_GetCurrentGameDir() );
+		Sys_RemovePIDFile( FS_GetCurrentGameDir( VFS_DEFAULT ) );
 	}
 
 	NET_Shutdown( );

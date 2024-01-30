@@ -95,7 +95,7 @@ void R_Init( void ) {
 	R_ModelInit();
 }
 
-shader_t *R_FindShader(const char *name, int lightmapIndex, imgFlags_t rawImageFlags ) {
+shader_t *R_FindShader(const char *name, int lightmapIndex, imgFlags_t rawImageFlags, vfsNum_t vfs ) {
 	return tr.defaultShader;
 }
 

@@ -305,7 +305,7 @@ void R_ImageList_f( void ) {
 			sizeSuffix = "Gb";
 		}
 
-		ri.Printf(PRINT_ALL, "%4i: %4ix%4i %s %4i%s %s\n", i, image->uploadWidth, image->uploadHeight, format, displaySize, sizeSuffix, image->imgName);
+		ri.Printf(PRINT_ALL, "%4i: %4ix%4i %s %4i%s %s %s\n", i, image->uploadWidth, image->uploadHeight, format, displaySize, sizeSuffix, image->imgName, ri.VFS_StringFromNum(image->vfs));
 		estTotalSize += estSize;
 	}
 
@@ -2076,7 +2076,7 @@ static void Upload32(int numTexLevels, const textureLevel_t *pics, int x, int y,
 				return;
 
 			// failed to upload all levels
-			ri.Error(ERR_DROP, "Unsupported Texture format: %x for %s", pics[0].format, image->imgName );
+			ri.Error(ERR_DROP, "Unsupported Texture format: %x for %s%s", pics[0].format, image->imgName, ri.VFS_Lang_FromVFSName(image->vfs) );
 		} else {
 			data = pics[baseLevel].data;
 		}
@@ -2151,7 +2151,7 @@ This is the only way any image_t are created
 ================
 */
 image_t *R_CreateImage( const char *name, byte *pic, int width, int height,
-		imgType_t type, imgFlags_t flags, int internalFormat ) {
+		imgType_t type, imgFlags_t flags, int internalFormat, vfsNum_t vfs ) {
 	textureLevel_t texLevel;
 
 	texLevel.format = GL_RGBA8;
@@ -2160,7 +2160,7 @@ image_t *R_CreateImage( const char *name, byte *pic, int width, int height,
 	texLevel.size = width * height * 4;
 	texLevel.data = pic;
 
-	return R_CreateImage2( name, 1, &texLevel, type, flags, internalFormat );
+	return R_CreateImage2( name, 1, &texLevel, type, flags, internalFormat, vfs );
 }
 
 /*
@@ -2171,7 +2171,7 @@ This is the only way any image_t are created
 ================
 */
 image_t *R_CreateImage2( const char *name, int numTexLevels, const textureLevel_t *pics,
-		imgType_t type, imgFlags_t flags, int internalFormat ) {
+		imgType_t type, imgFlags_t flags, int internalFormat, vfsNum_t vfs ) {
 	byte       *resampledBuffer = NULL;
 	image_t    *image;
 	qboolean    isLightmap = qfalse, scaled = qfalse;
@@ -2207,6 +2207,7 @@ image_t *R_CreateImage2( const char *name, int numTexLevels, const textureLevel_
 	image->flags = flags;
 
 	strcpy (image->imgName, name);
+	image->vfs = vfs;
 
 	image->width = width;
 	image->height = height;
@@ -2343,7 +2344,7 @@ void R_UpdateSubImage( image_t *image, byte *pic, int x, int y, int width, int h
 typedef struct
 {
 	char *ext;
-	void (*ImageLoader)( const char *, int *, textureLevel_t ** );
+	void (*ImageLoader)( const char *, int *, textureLevel_t **, vfsNum_t vfs );
 } imageExtToLoaderMap_t;
 
 // Note that the ordering indicates the order of preference used
@@ -2370,7 +2371,7 @@ Loads any of the supported image types into a canonical
 32 bit format.
 =================
 */
-void R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic )
+void R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs )
 {
 	qboolean orgNameFailed = qfalse;
 	int orgLoader = -1;
@@ -2394,7 +2395,7 @@ void R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic )
 			if( !Q_stricmp( ext, imageLoaders[ i ].ext ) )
 			{
 				// Load
-				imageLoaders[ i ].ImageLoader( localName, numLevels, pic );
+				imageLoaders[ i ].ImageLoader( localName, numLevels, pic, vfs );
 				break;
 			}
 		}
@@ -2428,7 +2429,7 @@ void R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic )
 		altName = va( "%s.%s", localName, imageLoaders[ i ].ext );
 
 		// Load
-		imageLoaders[ i ].ImageLoader( altName, numLevels, pic );
+		imageLoaders[ i ].ImageLoader( altName, numLevels, pic, vfs );
 
 		if( *pic )
 		{
@@ -2452,29 +2453,34 @@ Finds or loads the given image.
 Returns NULL if it fails, not a default image.
 ==============
 */
-image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
+image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags, vfsNum_t vfs )
 {
 	image_t	*image;
 	int	numLevels;
 	textureLevel_t	*pic;
 	long	hash;
 	int		textureInternalFormat = 0;
+	qboolean	isWhiteImage;
+	char	adjustedName[MAX_QPATH];
 
 	if (!name) {
 		return NULL;
 	}
+	
+	ri.FS_GetQPathAndVFS(name, adjustedName, &vfs);
 
-	hash = generateHashValue(name);
+	hash = generateHashValue(adjustedName);
 
 	//
 	// see if the image is already loaded
 	//
+	isWhiteImage = !strcmp( adjustedName, "*white" );
 	for (image=hashTable[hash]; image; image=image->next) {
-		if ( !strcmp( name, image->imgName ) ) {
+		if ( !strcmp( adjustedName, image->imgName ) && (isWhiteImage || image->vfs == vfs) ) {
 			// the white image can be used with any set of parms, but other mismatches are errors
-			if ( strcmp( name, "*white" ) ) {
+			if ( !isWhiteImage ) {
 				if ( image->flags != flags ) {
-					ri.Printf( PRINT_DEVELOPER, "WARNING: reused image %s with mixed flags (%i vs %i)\n", name, image->flags, flags );
+					ri.Printf( PRINT_DEVELOPER, "WARNING: reused image %s%s with mixed flags (%i vs %i)\n", name, ri.VFS_Lang_FromVFSName(image->vfs), image->flags, flags );
 				}
 			}
 			return image;
@@ -2484,8 +2490,9 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 	//
 	// load the pic from disk
 	//
-	R_LoadImage( name, &numLevels, &pic );
+	R_LoadImage( adjustedName, &numLevels, &pic, vfs );
 	if ( pic == NULL ) {
+		ri.Printf( PRINT_ERROR, "ERROR: Could not find image %s%s.\n", adjustedName, ri.VFS_Lang_FromVFSName(vfs) );
 		return NULL;
 	}
 
@@ -2503,11 +2510,11 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 
 		normalFlags = (flags & ~IMGFLAG_GENNORMALMAP) | IMGFLAG_NOLIGHTSCALE;
 
-		COM_StripExtension(name, normalName, MAX_QPATH);
+		COM_StripExtension(adjustedName, normalName, MAX_QPATH);
 		Q_strcat(normalName, MAX_QPATH, "_n");
 
 		// find normalmap in case it's there
-		normalImage = R_FindImageFile(normalName, IMGTYPE_NORMAL, normalFlags);
+		normalImage = R_FindImageFile(normalName, IMGTYPE_NORMAL, normalFlags, vfs);
 
 		// if not, generate it
 		if (normalImage == NULL && pic->format == GL_RGBA8)
@@ -2597,7 +2604,7 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 			}
 #endif
 
-			R_CreateImage( normalName, normalPic, normalWidth, normalHeight, IMGTYPE_NORMAL, normalFlags, 0 );
+			R_CreateImage( normalName, normalPic, normalWidth, normalHeight, IMGTYPE_NORMAL, normalFlags, 0, vfs );
 			ri.Free( normalPic );	
 		}
 	}
@@ -2616,7 +2623,7 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 			flags &= ~IMGFLAG_MIPMAP;
 	}
 
-	image = R_CreateImage2( ( char * ) name, numLevels, pic, type, flags, textureInternalFormat );
+	image = R_CreateImage2( ( char * ) adjustedName, numLevels, pic, type, flags, textureInternalFormat, vfs );
 	ri.Free( pic );
 	return image;
 }
@@ -2628,7 +2635,7 @@ R_CreateDlightImage
 ================
 */
 #define	DLIGHT_SIZE	128
-static void R_CreateDlightImage( void ) {
+static void R_CreateDlightImage( vfsNum_t vfs ) {
 	int		x,y;
 	byte	data[DLIGHT_SIZE*DLIGHT_SIZE][4];
 	int		b;
@@ -2684,7 +2691,7 @@ static void R_CreateDlightImage( void ) {
 			data[y*dlightSize + x][3] = 255;
 		}
 	}
-	tr.dlightImage = R_CreateImage("*dlight", (byte *)data, dlightSize, dlightSize, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0 );
+	tr.dlightImage = R_CreateImage("*dlight", (byte *)data, dlightSize, dlightSize, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0, vfs );
 }
 
 
@@ -2764,7 +2771,7 @@ R_CreateFogImages
 Create fog images for exponential and linear fog.
 ================
 */
-static void R_CreateFogImages( void ) {
+static void R_CreateFogImages( vfsNum_t vfs ) {
 	int		x, y, alpha;
 	byte	*data;
 	float	d;
@@ -2787,7 +2794,7 @@ static void R_CreateFogImages( void ) {
 		}
 	}
 
-	tr.fogImage = R_CreateImage("*fog", (byte *)data, fog_s, fog_t, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0 );
+	tr.fogImage = R_CreateImage("*fog", (byte *)data, fog_s, fog_t, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0, VFS_DEFAULT );
 	ri.Hunk_FreeTempMemory( data );
 
 
@@ -2822,7 +2829,7 @@ static void R_CreateFogImages( void ) {
 		}
 	}
 
-	tr.linearFogImage = R_CreateImage("*linearfog", (byte *)data, fog_s, fog_t, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0 );
+	tr.linearFogImage = R_CreateImage("*linearfog", (byte *)data, fog_s, fog_t, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0, vfs );
 	ri.Hunk_FreeTempMemory( data );
 }
 
@@ -2859,7 +2866,7 @@ static void R_CreateDefaultImage( void ) {
 		data[x][DEFAULT_SIZE-1][2] =
 		data[x][DEFAULT_SIZE-1][3] = 255;
 	}
-	tr.defaultImage = R_CreateImage("*default", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_MIPMAP, 0);
+	tr.defaultImage = R_CreateImage("*default", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_MIPMAP, 0, VFS_DEFAULT);
 }
 
 /*
@@ -2867,6 +2874,7 @@ static void R_CreateDefaultImage( void ) {
 R_CreateBuiltinImages
 ==================
 */
+// TODO: Make these accessible to any VFS?
 void R_CreateBuiltinImages( void ) {
 	int		x,y;
 	byte	data[DEFAULT_SIZE][DEFAULT_SIZE][4];
@@ -2875,13 +2883,13 @@ void R_CreateBuiltinImages( void ) {
 
 	// we use a solid white image instead of disabling texturing
 	Com_Memset( data, 255, sizeof( data ) );
-	tr.whiteImage = R_CreateImage("*white", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
+	tr.whiteImage = R_CreateImage("*white", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0, VFS_DEFAULT);
 
 	if (r_dlightMode->integer >= 2)
 	{
 		for( x = 0; x < MAX_DLIGHTS; x++)
 		{
-			tr.shadowCubemaps[x] = R_CreateImage(va("*shadowcubemap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE | IMGFLAG_CUBEMAP, 0);
+			tr.shadowCubemaps[x] = R_CreateImage(va("*shadowcubemap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE | IMGFLAG_CUBEMAP, 0, VFS_DEFAULT);
 		}
 	}
 
@@ -2896,16 +2904,16 @@ void R_CreateBuiltinImages( void ) {
 		}
 	}
 
-	tr.identityLightImage = R_CreateImage("*identityLight", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
+	tr.identityLightImage = R_CreateImage("*identityLight", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0, VFS_DEFAULT);
 
 
 	for(x=0;x<32;x++) {
 		// scratchimage is usually used for cinematic drawing
-		tr.scratchImage[x] = R_CreateImage("*scratch", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_PICMIP | IMGFLAG_CLAMPTOEDGE, 0);
+		tr.scratchImage[x] = R_CreateImage("*scratch", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_PICMIP | IMGFLAG_CLAMPTOEDGE, 0, VFS_DEFAULT);
 	}
 
-	R_CreateDlightImage();
-	R_CreateFogImages();
+	R_CreateDlightImage(VFS_DEFAULT);
+	R_CreateFogImages(VFS_DEFAULT);
 
 	if (glRefConfig.framebufferObject)
 	{
@@ -2920,19 +2928,19 @@ void R_CreateBuiltinImages( void ) {
 
 		rgbFormat = GL_RGBA8;
 
-		tr.renderImage = R_CreateImage("_render", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+		tr.renderImage = R_CreateImage("_render", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat, VFS_DEFAULT);
 
 		if (r_shadowBlur->integer)
-			tr.screenScratchImage = R_CreateImage("screenScratch", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);
+			tr.screenScratchImage = R_CreateImage("screenScratch", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat, VFS_DEFAULT);
 
 		if (r_shadowBlur->integer || r_ssao->integer)
-			tr.hdrDepthImage = R_CreateImage("*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
+			tr.hdrDepthImage = R_CreateImage("*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F, VFS_DEFAULT);
 
 		if (r_drawSunRays->integer)
-			tr.sunRaysImage = R_CreateImage("*sunRays", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);
+			tr.sunRaysImage = R_CreateImage("*sunRays", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat, VFS_DEFAULT);
 
-		tr.renderDepthImage  = R_CreateImage("*renderdepth",  NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
-		tr.textureDepthImage = R_CreateImage("*texturedepth", NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+		tr.renderDepthImage  = R_CreateImage("*renderdepth",  NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24, VFS_DEFAULT);
+		tr.textureDepthImage = R_CreateImage("*texturedepth", NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24, VFS_DEFAULT);
 
 		{
 			void *p;
@@ -2943,28 +2951,28 @@ void R_CreateBuiltinImages( void ) {
 			data[0][0][3] = 255;
 			p = data;
 
-			tr.calcLevelsImage =   R_CreateImage("*calcLevels",    p, 1, 1, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
-			tr.targetLevelsImage = R_CreateImage("*targetLevels",  p, 1, 1, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
-			tr.fixedLevelsImage =  R_CreateImage("*fixedLevels",   p, 1, 1, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+			tr.calcLevelsImage =   R_CreateImage("*calcLevels",    p, 1, 1, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat, VFS_DEFAULT);
+			tr.targetLevelsImage = R_CreateImage("*targetLevels",  p, 1, 1, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat, VFS_DEFAULT);
+			tr.fixedLevelsImage =  R_CreateImage("*fixedLevels",   p, 1, 1, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat, VFS_DEFAULT);
 		}
 
 		for (x = 0; x < 2; x++)
 		{
-			tr.textureScratchImage[x] = R_CreateImage(va("*textureScratch%d", x), NULL, 256, 256, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+			tr.textureScratchImage[x] = R_CreateImage(va("*textureScratch%d", x), NULL, 256, 256, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8, VFS_DEFAULT);
 		}
 		for (x = 0; x < 2; x++)
 		{
-			tr.quarterImage[x] = R_CreateImage(va("*quarter%d", x), NULL, width / 2, height / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+			tr.quarterImage[x] = R_CreateImage(va("*quarter%d", x), NULL, width / 2, height / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8, VFS_DEFAULT);
 		}
 
 		if (r_ssao->integer)
 		{
-			tr.screenSsaoImage = R_CreateImage("*screenSsao", NULL, width / 2, height / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+			tr.screenSsaoImage = R_CreateImage("*screenSsao", NULL, width / 2, height / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8, VFS_DEFAULT);
 		}
 
 		for( x = 0; x < MAX_DRAWN_PSHADOWS; x++)
 		{
-			tr.pshadowMaps[x] = R_CreateImage(va("*shadowmap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+			tr.pshadowMaps[x] = R_CreateImage(va("*shadowmap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24, VFS_DEFAULT);
 			//qglTextureParameterfEXT(tr.pshadowMaps[x]->texnum, GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
 			//qglTextureParameterfEXT(tr.pshadowMaps[x]->texnum, GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 		}
@@ -2973,17 +2981,17 @@ void R_CreateBuiltinImages( void ) {
 		{
 			for ( x = 0; x < 4; x++)
 			{
-				tr.sunShadowDepthImage[x] = R_CreateImage(va("*sunshadowdepth%i", x), NULL, r_shadowMapSize->integer, r_shadowMapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+				tr.sunShadowDepthImage[x] = R_CreateImage(va("*sunshadowdepth%i", x), NULL, r_shadowMapSize->integer, r_shadowMapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24, VFS_DEFAULT);
 				qglTextureParameterfEXT(tr.sunShadowDepthImage[x]->texnum, GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
 				qglTextureParameterfEXT(tr.sunShadowDepthImage[x]->texnum, GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 			}
 
-			tr.screenShadowImage = R_CreateImage("*screenShadow", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+			tr.screenShadowImage = R_CreateImage("*screenShadow", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8, VFS_DEFAULT);
 		}
 
 		if (r_cubeMapping->integer)
 		{
-			tr.renderCubeImage = R_CreateImage("*renderCube", NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, rgbFormat);
+			tr.renderCubeImage = R_CreateImage("*renderCube", NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, rgbFormat, VFS_DEFAULT);
 		}
 	}
 }

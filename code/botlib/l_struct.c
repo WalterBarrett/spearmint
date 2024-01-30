@@ -37,6 +37,10 @@ Suite 120, Rockville, Maryland 20850 USA.
  *
  *****************************************************************************/
 
+#ifndef BSPC
+#include "../qcommon/vfs.h"
+#endif //!BSPC
+
 #ifdef BOTLIB
 #include "../qcommon/q_shared.h"
 #include "botlib.h"				//for the include of be_interface.h

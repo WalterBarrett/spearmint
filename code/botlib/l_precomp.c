@@ -200,9 +200,9 @@ void PC_PushScript(source_t *source, script_t *script)
 
 	for (s = source->scriptstack; s; s = s->next)
 	{
-		if (!Q_stricmp(s->filename, script->filename))
+		if (!Q_stricmp(s->filename, script->filename) && s->vfs == script->vfs)
 		{
-			SourceError(source, "%s recursively included", script->filename);
+			SourceError(source, "%s%s recursively included", script->filename, VFS_Lang_FromVFSName(script->vfs));
 			return;
 		} //end if
 	} //end for
@@ -546,7 +546,7 @@ int PC_NameHash(char *name)
 // Returns:					-
 // Changes Globals:		-
 //============================================================================
-void PC_AddDefineToHash(define_t *define, define_t **definehash)
+void PC_AddDefineToHash(define_t *define, define_t **definehash, vfsNum_t vfs)
 {
 	int hash;
 
@@ -655,6 +655,7 @@ void PC_AddBuiltinDefines(source_t *source)
 		{ "__DATE__",	BUILTIN_DATE },
 		{ "__TIME__",	BUILTIN_TIME },
 //		{ "__STDC__", BUILTIN_STDC },
+		{ "__VFS__",	BUILTIN_VFS },
 		{ NULL, 0 }
 	};
 
@@ -668,7 +669,7 @@ void PC_AddBuiltinDefines(source_t *source)
 		define->builtin = builtin[i].builtin;
 		//add the define to the source
 #if DEFINEHASHING
-		PC_AddDefineToHash(define, source->definehash);
+		PC_AddDefineToHash(define, source->definehash, source->vfs);
 #else
 		define->next = source->defines;
 		source->defines = define;
@@ -737,6 +738,17 @@ int PC_ExpandBuiltinDefine(source_t *source, token_t *deftoken, define_t *define
 			strncat(token->string, curtime+11, 8);
 			strcat(token->string, "\"");
 			free(curtime);
+			token->type = TT_NAME;
+			token->subtype = strlen(token->string);
+			*firsttoken = token;
+			*lasttoken = token;
+			break;
+		} //end case
+		case BUILTIN_VFS:
+		{
+			strcpy(token->string, "\"");
+			strcat(token->string, VFS_StringFromNum(source->scriptstack->vfs));
+			strcat(token->string, "\"");
 			token->type = TT_NAME;
 			token->subtype = strlen(token->string);
 			*firsttoken = token;
@@ -969,12 +981,12 @@ int PC_Directive_include(source_t *source)
 	{
 		StripDoubleQuotes(token.string);
 		PC_ConvertPath(token.string);
-		script = LoadScriptFile(token.string);
+		script = LoadScriptFile(token.string, source->vfs);
 		if (!script)
 		{
 			Q_strncpyz(path, source->includepath, sizeof(path));
 			Q_strcat(path, sizeof(path), token.string);
-			script = LoadScriptFile(path);
+			script = LoadScriptFile(path, source->vfs);
 		} //end if
 	} //end if
 	else if (token.type == TT_PUNCTUATION && *token.string == '<')
@@ -1000,7 +1012,7 @@ int PC_Directive_include(source_t *source)
 			return qfalse;
 		} //end if
 		PC_ConvertPath(path);
-		script = LoadScriptFile(path);
+		script = LoadScriptFile(path, source->vfs);
 	} //end if
 	else
 	{
@@ -1013,7 +1025,7 @@ int PC_Directive_include(source_t *source)
 		SourceWarning(source, "file %s not found", path);
 		return qtrue;
 #else
-		SourceError(source, "file %s not found", path);
+		SourceError(source, "file %s%s not found", path, VFS_Lang_FromVFSName(source->vfs));
 		return qfalse;
 #endif //SCREWUP
 	} //end if
@@ -1185,7 +1197,7 @@ int PC_Directive_define(source_t *source)
 	strcpy(define->name, token.string);
 	//add the define to the source
 #if DEFINEHASHING
-	PC_AddDefineToHash(define, source->definehash);
+	PC_AddDefineToHash(define, source->definehash, source->vfs);
 #else //DEFINEHASHING
 	define->next = source->defines;
 	source->defines = define;
@@ -1279,7 +1291,7 @@ int PC_Directive_define(source_t *source)
 // Returns:					-
 // Changes Globals:		-
 //============================================================================
-define_t *PC_DefineFromString(const char *string)
+define_t *PC_DefineFromString(const char *string, vfsNum_t vfs)
 {
 	script_t *script;
 	source_t src;
@@ -1289,10 +1301,11 @@ define_t *PC_DefineFromString(const char *string)
 
 	PC_InitTokenHeap();
 
-	script = LoadScriptMemory(string, strlen(string), "*extern");
+	script = LoadScriptMemory(string, strlen(string), "*extern", vfs);
 	//create a new source
 	Com_Memset(&src, 0, sizeof(source_t));
 	Q_strncpyz(src.filename, "*extern", sizeof(src.filename));
+	src.vfs = vfs;
 	src.scriptstack = script;
 #if DEFINEHASHING
 	src.definehash = GetClearedMemory(DEFINEHASHSIZE * sizeof(define_t *));
@@ -1337,14 +1350,14 @@ define_t *PC_DefineFromString(const char *string)
 // Returns:					-
 // Changes Globals:		-
 //============================================================================
-int PC_AddDefine(source_t *source, const char *string)
+int PC_AddDefine(source_t *source, const char *string, vfsNum_t vfs)
 {
 	define_t *define;
 
-	define = PC_DefineFromString(string);
+	define = PC_DefineFromString(string, vfs);
 	if (!define) return qfalse;
 #if DEFINEHASHING
-	PC_AddDefineToHash(define, source->definehash);
+	PC_AddDefineToHash(define, source->definehash, source->vfs);
 #else //DEFINEHASHING
 	define->next = source->defines;
 	source->defines = define;
@@ -1358,14 +1371,14 @@ int PC_AddDefine(source_t *source, const char *string)
 // Returns:					-
 // Changes Globals:		-
 //============================================================================
-int PC_AddGlobalDefine(define_t **globaldefines, const char *string)
+int PC_AddGlobalDefine(define_t **globaldefines, const char *string, vfsNum_t vfs)
 {
 	define_t *define;
 
 	if ( !globaldefines )
 		globaldefines = &globaldefines_implicit;
 
-	define = PC_DefineFromString(string);
+	define = PC_DefineFromString(string, vfs);
 	if (!define) return qfalse;
 	define->next = *globaldefines;
 	*globaldefines = define;
@@ -1484,7 +1497,7 @@ void PC_AddGlobalDefinesToSource(source_t *source, const define_t *globaldefines
 	{
 		newdefine = PC_CopyDefine(source, define);
 #if DEFINEHASHING
-		PC_AddDefineToHash(newdefine, source->definehash);
+		PC_AddDefineToHash(newdefine, source->definehash, source->vfs);
 #else //DEFINEHASHING
 		newdefine->next = source->defines;
 		source->defines = newdefine;
@@ -2920,14 +2933,14 @@ void PC_SetPunctuations(source_t *source, punctuation_t *p)
 // Returns:				-
 // Changes Globals:		-
 //============================================================================
-source_t *LoadSourceFile(const char *filename, const define_t *globaldefines)
+source_t *LoadSourceFile(const char *filename, const define_t *globaldefines, vfsNum_t vfs)
 {
 	source_t *source;
 	script_t *script;
 
 	PC_InitTokenHeap();
 
-	script = LoadScriptFile(filename);
+	script = LoadScriptFile(filename, vfs);
 	if (!script) return NULL;
 
 	script->next = NULL;
@@ -2936,6 +2949,7 @@ source_t *LoadSourceFile(const char *filename, const define_t *globaldefines)
 	Com_Memset(source, 0, sizeof(source_t));
 
 	Q_strncpyz(source->filename, filename, sizeof(source->filename));
+	source->vfs = vfs;
 	source->scriptstack = script;
 	source->tokens = NULL;
 	source->defines = NULL;
@@ -2954,14 +2968,14 @@ source_t *LoadSourceFile(const char *filename, const define_t *globaldefines)
 // Returns:					-
 // Changes Globals:		-
 //============================================================================
-source_t *LoadSourceMemory(const char *ptr, int length, const char *name, const define_t *globaldefines)
+source_t *LoadSourceMemory(const char *ptr, int length, const char *name, const define_t *globaldefines, vfsNum_t vfs)
 {
 	source_t *source;
 	script_t *script;
 
 	PC_InitTokenHeap();
 
-	script = LoadScriptMemory(ptr, length, name);
+	script = LoadScriptMemory(ptr, length, name, vfs);
 	if (!script) return NULL;
 	script->next = NULL;
 
@@ -2969,6 +2983,7 @@ source_t *LoadSourceMemory(const char *ptr, int length, const char *name, const 
 	Com_Memset(source, 0, sizeof(source_t));
 
 	Q_strncpyz(source->filename, name, sizeof(source->filename));
+	source->vfs = vfs;
 	source->scriptstack = script;
 	source->tokens = NULL;
 	source->defines = NULL;
@@ -3050,11 +3065,11 @@ void FreeSource(source_t *source)
 // Changes Globals:		-
 //============================================================================
 
-#define MAX_SOURCEFILES		64
+#define MAX_SOURCEFILES		(64*(VFS_MAX-VFS_DEFAULT))
 
 source_t *sourceFiles[MAX_SOURCEFILES];
 
-int PC_LoadSourceHandle(const char *filename, const char *basepath, const define_t *globaldefines)
+int PC_LoadSourceHandle(const char *filename, const char *basepath, const define_t *globaldefines, vfsNum_t vfs)
 {
 	source_t *source;
 	int i;
@@ -3067,7 +3082,7 @@ int PC_LoadSourceHandle(const char *filename, const char *basepath, const define
 	if (i >= MAX_SOURCEFILES)
 		return 0;
 	PS_SetBaseFolder(basepath);
-	source = LoadSourceFile(filename, globaldefines);
+	source = LoadSourceFile(filename, globaldefines, vfs);
 	if (!source)
 		return 0;
 	sourceFiles[i] = source;
@@ -3096,14 +3111,14 @@ int PC_FreeSourceHandle(int handle)
 // Returns:				-
 // Changes Globals:		-
 //============================================================================
-int PC_AddDefineHandle(int handle, const char *define)
+int PC_AddDefineHandle(int handle, const char *define, vfsNum_t vfs)
 {
 	if (handle < 1 || handle >= MAX_SOURCEFILES)
 		return qfalse;
 	if (!sourceFiles[handle])
 		return qfalse;
 
-	return PC_AddDefine(sourceFiles[handle], define);
+	return PC_AddDefine(sourceFiles[handle], define, vfs);
 } //end of the function PC_FreeSourceHandle
 //============================================================================
 //
@@ -3155,7 +3170,7 @@ void PC_UnreadLastTokenHandle( int handle ) {
 // Returns:				-
 // Changes Globals:		-
 //============================================================================
-int PC_SourceFileAndLine(int handle, char *filename, int *line)
+int PC_SourceFileAndLine(int handle, char *filename, int *line, vfsNum_t *vfs)
 {
 	if (handle < 1 || handle >= MAX_SOURCEFILES)
 		return qfalse;
@@ -3163,6 +3178,9 @@ int PC_SourceFileAndLine(int handle, char *filename, int *line)
 		return qfalse;
 
 	strcpy(filename, sourceFiles[handle]->filename);
+	if (vfs != NULL) {
+		*vfs = sourceFiles[handle]->vfs;
+	}
 	if (sourceFiles[handle]->scriptstack)
 		*line = sourceFiles[handle]->scriptstack->line;
 	else
@@ -3194,7 +3212,7 @@ void PC_CheckOpenSourceHandles(void)
 		if (sourceFiles[i])
 		{
 #ifdef BOTLIB
-			Com_Printf(S_COLOR_RED "Error: file %s still open in precompiler\n", sourceFiles[i]->scriptstack->filename);
+			Com_Printf(S_COLOR_RED "Error: file %s%s still open in precompiler\n", sourceFiles[i]->scriptstack->filename, VFS_Lang_FromVFSName(sourceFiles[i]->scriptstack->vfs));
 #endif	//BOTLIB
 		} //end if
 	} //end for

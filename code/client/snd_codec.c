@@ -42,7 +42,7 @@ Opens/loads a sound, tries codec based on the sound's file extension
 then tries all supported codecs.
 =================
 */
-static void *S_CodecGetSound(const char *filename, snd_info_t *info)
+static void *S_CodecGetSound(const char *filename, snd_info_t *info, vfsNum_t vfs)
 {
 	snd_codec_t *codec;
 	snd_codec_t *orgCodec = NULL;
@@ -65,9 +65,9 @@ static void *S_CodecGetSound(const char *filename, snd_info_t *info)
 			{
 				// Load
 				if( info )
-					rtn = codec->load(localName, info);
+					rtn = codec->load(localName, info, vfs);
 				else
-					rtn = codec->open(localName);
+					rtn = codec->open(localName, vfs);
 				break;
 			}
 		}
@@ -102,9 +102,9 @@ static void *S_CodecGetSound(const char *filename, snd_info_t *info)
 
 		// Load
 		if( info )
-			rtn = codec->load(altName, info);
+			rtn = codec->load(altName, info, vfs);
 		else
-			rtn = codec->open(altName);
+			rtn = codec->open(altName, vfs);
 
 		if( rtn )
 		{
@@ -174,9 +174,9 @@ void S_CodecRegister(snd_codec_t *codec)
 S_CodecLoad
 =================
 */
-void *S_CodecLoad(const char *filename, snd_info_t *info)
+void *S_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs)
 {
-	return S_CodecGetSound(filename, info);
+	return S_CodecGetSound(filename, info, vfs);
 }
 
 /*
@@ -184,9 +184,9 @@ void *S_CodecLoad(const char *filename, snd_info_t *info)
 S_CodecOpenStream
 =================
 */
-snd_stream_t *S_CodecOpenStream(const char *filename)
+snd_stream_t *S_CodecOpenStream(const char *filename, vfsNum_t vfs)
 {
-	return S_CodecGetSound(filename, NULL);
+	return S_CodecGetSound(filename, NULL, vfs);
 }
 
 void S_CodecCloseStream(snd_stream_t *stream)
@@ -207,14 +207,14 @@ int S_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer)
 S_CodecUtilOpen
 =================
 */
-snd_stream_t *S_CodecUtilOpen(const char *filename, snd_codec_t *codec)
+snd_stream_t *S_CodecUtilOpen(const char *filename, snd_codec_t *codec, vfsNum_t vfs)
 {
 	snd_stream_t *stream;
 	fileHandle_t hnd;
 	int length;
 
 	// Try to open the file
-	length = FS_FOpenFileRead(filename, &hnd, qtrue);
+	length = FS_FOpenFileRead_VFS(filename, &hnd, qtrue, vfs);
 	if(!hnd)
 	{
 		return NULL;

@@ -31,11 +31,12 @@ Suite 120, Rockville, Maryland 20850 USA.
 #ifndef _QCOMMON_H_
 #define _QCOMMON_H_
 
+#include "../qcommon/gameconfig.h"
 #include "../qcommon/cm_public.h"
 #include "../renderercommon/tr_public.h"
 
 // Engine name
-#define PRODUCT_NAME				"Spearmint"
+#define PRODUCT_NAME				"Catmint"
 
 // Keep this in-sync with VERSION in Makefile.
 #ifndef PRODUCT_VERSION
@@ -696,6 +697,10 @@ typedef enum {
 #endif
 
 qboolean FS_Initialized( void );
+qboolean VFS_Initialized( vfsNum_t vfs );
+
+void	FS_GetQPathAndVFS(const char* rawQPath, char outQPath[MAX_QPATH], vfsNum_t* outVfs);
+void	FS_GetShaderTokenAndVFS(const char* rawShaderToken, char outShaderToken[MAX_TOKEN_CHARS], vfsNum_t* outVfs);
 
 void	FS_InitFilesystem ( void );
 void	FS_Shutdown( qboolean closemfp );
@@ -707,9 +712,10 @@ void	FS_Restart( qboolean gameDirChanged );
 void	FS_GameValid( void );
 qboolean FS_TryLastValidGame( void );
 
-void FS_AddGameDirectory( const char *path, const char *dir );
+void FS_AddGameDirectory( const char *path, const char *dir, vfsNum_t vfs );
 
 char	**FS_ListFiles( const char *directory, const char *extension, int *numfiles );
+char	**FS_ListFiles_VFS( const char *directory, const char *extension, int *numfiles, vfsNum_t vfs );
 // directory should not have either a leading or trailing /
 // if extension is "/", only subdirectories will be returned
 // the returned files will not include any directories or /
@@ -717,6 +723,7 @@ char	**FS_ListFiles( const char *directory, const char *extension, int *numfiles
 void	FS_FreeFileList( char **list );
 
 qboolean FS_FileExists( const char *file );
+qboolean FS_FileExists_VFS( const char *file, vfsNum_t vfs );
 qboolean FS_FileInPathExists(const char *testpath);
 
 qboolean FS_CreatePath (char *OSPath);
@@ -731,14 +738,19 @@ qboolean FS_CompareZipChecksum(const char *zipfile);
 int		FS_LoadStack( void );
 
 char		**FS_GetFileList( const char *path, const char *extension, int *numfiles, qboolean allowNonPureFilesOnDisk );
+char		**FS_GetFileList_VFS( const char *path, const char *extension, int *numfiles, qboolean allowNonPureFilesOnDisk, vfsNum_t vfs );
 int		FS_GetFileListBuffer( const char *path, const char *extension, char *listbuf, int bufsize );
+int		FS_GetFileListBuffer_VFS( const char *path, const char *extension, char *listbuf, int bufsize, vfsNum_t vfs );
 int		FS_GetModList(  char *listbuf, int bufsize );
 
 void	FS_GetModDescription( const char *modDir, char *description, int descriptionLen );
 
 fileHandle_t	FS_FOpenFileWrite( const char *qpath );
+fileHandle_t	FS_FOpenFileWrite_VFS( const char *qpath, vfsNum_t vfs );
 fileHandle_t	FS_FOpenFileAppend( const char *filename );
+fileHandle_t	FS_FOpenFileAppend_VFS( const char *filename, vfsNum_t vfs );
 fileHandle_t	FS_FCreateOpenPipeFile( const char *filename );
+fileHandle_t	FS_FCreateOpenPipeFile_VFS( const char *filename, vfsNum_t vfs );
 // will properly create any needed paths and deal with seperater character issues
 
 qboolean	FS_SV_FileExists( const char *filename );
@@ -747,6 +759,7 @@ fileHandle_t FS_SV_FOpenFileWrite( const char *filename );
 long		FS_SV_FOpenFileRead( const char *filename, fileHandle_t *fp );
 void	FS_SV_Rename( const char *from, const char *to, qboolean safe );
 long		FS_FOpenFileRead( const char *qpath, fileHandle_t *file, qboolean uniqueFILE );
+long		FS_FOpenFileRead_VFS( const char *qpath, fileHandle_t *file, qboolean uniqueFILE, vfsNum_t vfs );
 // if uniqueFILE is true, then a new FILE will be fopened even if the file
 // is found in an already open pak file.  If uniqueFILE is false, you must call
 // FS_FCloseFile instead of fclose, otherwise the pak FILE would be improperly closed
@@ -766,7 +779,9 @@ void	FS_FCloseFile( fileHandle_t f );
 // note: you can't just fclose from another DLL, due to MS libc issues
 
 long	FS_ReadFileDir(const char *qpath, void *searchPath, qboolean unpure, void **buffer);
+long	FS_ReadFileDir_VFS(const char *qpath, void *searchPath, qboolean unpure, void **buffer, vfsNum_t vfs);
 long	FS_ReadFile(const char *qpath, void **buffer);
+long	FS_ReadFile_VFS(const char *qpath, void **buffer, vfsNum_t vfs);
 // returns the length of the file
 // a null buffer will just return the file length without loading
 // as a quick check for existence. -1 length == not present
@@ -781,6 +796,7 @@ void	FS_FreeFile( void *buffer );
 // frees the memory returned by FS_ReadFile
 
 void	FS_WriteFile( const char *qpath, const void *buffer, int size );
+void	FS_WriteFile_VFS( const char *qpath, const void *buffer, int size, vfsNum_t vfs );
 // writes a complete file, creating any subdirectories needed
 
 long FS_filelength(fileHandle_t f);
@@ -795,6 +811,7 @@ void 	QDECL FS_Printf( fileHandle_t f, const char *fmt, ... ) __attribute__ ((fo
 // like fprintf
 
 int		FS_FOpenFileByMode( const char *qpath, fileHandle_t *f, fsMode_t mode );
+int		FS_FOpenFileByMode_VFS( const char *qpath, fileHandle_t *f, fsMode_t mode, vfsNum_t vfs );
 // opens a file for reading, writing, or appending depending on the value of mode
 
 int		FS_Seek( fileHandle_t f, long offset, int origin );
@@ -807,7 +824,7 @@ const char *FS_LoadedPakChecksums( void );
 // Returns a space separated string containing the checksums of all loaded pk3 files.
 // Servers with sv_pure set will get this string and pass it to clients.
 
-int			FS_ReferencedPakChecksum( int n );
+int			FS_ReferencedPakChecksum( int n, vfsNum_t vfs );
 const char *FS_ReferencedPakNames( void );
 const char *FS_ReferencedPakChecksums( void );
 // Returns a space separated string containing the checksums of all referenced pk3 files.
@@ -833,41 +850,10 @@ int FS_HomeRemove( const char *homePath );
 void	FS_FilenameCompletion( char **filenames, int nfiles,
 		qboolean stripExt, void(*callback)(const char *s), qboolean allowNonPureFilesOnDisk );
 
-const char *FS_GetCurrentGameDir(void);
-qboolean FS_Which(const char *filename, void *searchPath);
+const char *FS_GetCurrentGameDir(vfsNum_t vfs);
+qboolean FS_Which(const char *filename, void *searchPath, vfsNum_t vfs);
 
 qboolean FS_IsDemoExt(const char *filename, int namelen);
-
-/*
-==============================================================
-
-Game config, loaded from mint-game.settings (see GAMESETTINGS define)
-
-==============================================================
-*/
-
-#define MAX_GAMEDIRS 16 // max gamedirs a mod can have
-#define MAX_LOADINGSCREENS	200
-
-typedef struct loadingScreen_s {
-	char	shaderName[MAX_QPATH];
-	float	aspect;
-	vec3_t	color;
-} loadingScreen_t;
-
-typedef struct {
-	char	gameDirs[MAX_GAMEDIRS][MAX_QPATH];
-	int		numGameDirs;
-
-#ifndef DEDICATED
-	char	defaultSound[MAX_QPATH];
-
-	loadingScreen_t	loadingScreens[MAX_LOADINGSCREENS];
-	int			numLoadingScreens;
-#endif
-} gameConfig_t;
-
-extern gameConfig_t com_gameConfig;
 
 /*
 ==============================================================

@@ -228,7 +228,7 @@ qboolean S_LoadSound( sfx_t *sfx )
 	int		size_per_sec;
 
 	// load it in
-	data = S_CodecLoad(sfx->soundName, &info);
+	data = S_CodecLoad(sfx->soundName, &info, sfx->vfs);
 	if(!data)
 		return qfalse;
 

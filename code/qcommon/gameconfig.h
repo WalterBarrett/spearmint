@@ -27,66 +27,35 @@ terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
 Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
-
-// snddma_null.c
-// all other sound mixing is portable
+// gameconfig.h -- Game config, loaded from mint-game.settings (see GAMESETTINGS define)
+#ifndef _GAMECONFIG_H_
+#define _GAMECONFIG_H_
 
 #include "../qcommon/q_shared.h"
-#include "../qcommon/qcommon.h"
+#include "../qcommon/vfs.h"
 
-qboolean SNDDMA_Init(void)
-{
-	return qfalse;
-}
+#define MAX_GAMEDIRS 16 // max gamedirs a mod can have per VFS
+#define MAX_LOADINGSCREENS	200
 
-int	SNDDMA_GetDMAPos(void)
-{
-	return 0;
-}
+typedef struct loadingScreen_s {
+	char	shaderName[MAX_QPATH];
+	float	aspect;
+	vec3_t	color;
+} loadingScreen_t;
 
-void SNDDMA_Shutdown(void)
-{
-}
+typedef struct {
+	char	vfsDirs[VFS_MAX][MAX_GAMEDIRS][MAX_QPATH];
+	int		numVfsDirs[VFS_MAX];
+	char	vfsNames[VFS_MAX][MAX_QPATH];
+	int		vfsCount;
 
-void SNDDMA_BeginPainting (void)
-{
-}
+#ifndef DEDICATED
+	char	defaultSound[MAX_QPATH];
 
-void SNDDMA_Submit(void)
-{
-}
-
-#ifdef USE_VOIP
-void SNDDMA_StartCapture(void)
-{
-}
-
-int SNDDMA_AvailableCaptureSamples(void)
-{
-	return 0;
-}
-
-void SNDDMA_Capture(int samples, byte *data)
-{
-}
-
-void SNDDMA_StopCapture(void)
-{
-}
-
-void SNDDMA_MasterGain( float val )
-{
-}
+	loadingScreen_t	loadingScreens[MAX_LOADINGSCREENS];
+	int			numLoadingScreens;
 #endif
+} gameConfig_t;
 
-
-sfxHandle_t S_RegisterSound( const char *name, qboolean compressed, vfsNum_t vfs ) 
-{
-	return 0;
-}
-
-void S_StartLocalSound( sfxHandle_t sfxHandle, int channelNum ) {
-}
-
-void S_ClearSoundBuffer( void ) {
-}
+extern gameConfig_t com_gameConfig;
+#endif

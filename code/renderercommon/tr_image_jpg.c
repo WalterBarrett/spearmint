@@ -86,7 +86,7 @@ static void R_JPGOutputMessage(j_common_ptr cinfo)
   ri.Printf(PRINT_ALL, "%s\n", buffer);
 }
 
-void R_LoadJPG(const char *filename, int *numTexLevels, textureLevel_t **pic)
+void R_LoadJPG(const char *filename, int *numTexLevels, textureLevel_t **pic, vfsNum_t vfs)
 {
   /* This struct contains the JPEG decompression parameters and pointers to
    * working space (which is allocated as needed by the JPEG library).
@@ -124,7 +124,7 @@ void R_LoadJPG(const char *filename, int *numTexLevels, textureLevel_t **pic)
    * requires it in order to read binary files.
    */
 
-  len = ri.FS_ReadFile ( ( char * ) filename, &fbuffer.v);
+  len = ri.FS_ReadFile_VFS ( ( char * ) filename, &fbuffer.v, vfs);
   if (!fbuffer.b || len < 0) {
 	return;
   }

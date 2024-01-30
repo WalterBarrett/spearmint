@@ -288,6 +288,14 @@ typedef enum {
 	G_CLIPTOENTITIES, // ( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask );
 	G_CLIPTOENTITIESCAPSULE, // ( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask );
 
+
+	G_FS_FOPEN_FILE_VFS = 2000 + G_FS_FOPEN_FILE,
+	G_FS_GETFILELIST_VFS = 2000 + G_FS_GETFILELIST,
+	G_PC_ADD_GLOBAL_DEFINE_VFS = 2000 + G_PC_ADD_GLOBAL_DEFINE,
+	G_PC_LOAD_SOURCE_VFS = 2000 + G_PC_LOAD_SOURCE,
+	G_PC_ADD_DEFINE_VFS = 2000 + G_PC_ADD_DEFINE,
+	G_PC_SOURCE_FILE_AND_LINE_VFS = 2000 + G_PC_SOURCE_FILE_AND_LINE,
+	G_R_REGISTERMODEL_VFS = 2000 + G_R_REGISTERMODEL,
 } gameImport_t;
 
 

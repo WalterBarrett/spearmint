@@ -1051,6 +1051,10 @@ int SV_WriteDownloadToClient(client_t *cl, msg_t *msg)
 	char errorMessage[1024];
 	char pakbuf[MAX_QPATH], *pakptr;
 	int numRefPaks;
+	char adjpath[MAX_QPATH];
+	vfsNum_t vfs = VFS_DEFAULT;
+
+	FS_GetQPathAndVFS(cl->downloadName, adjpath, &vfs);
 
 	if (!*cl->downloadName)
 		return 0;	// Nothing being downloaded
@@ -1060,7 +1064,7 @@ int SV_WriteDownloadToClient(client_t *cl, msg_t *msg)
 		pakType_t pakType = PAK_UNKNOWN;
 	
  		// Chop off filename extension.
-		Com_sprintf(pakbuf, sizeof(pakbuf), "%s", cl->downloadName);
+		Com_sprintf(pakbuf, sizeof(pakbuf), "%s", adjpath);
 		pakptr = strrchr(pakbuf, '.');
 		
 		if(pakptr)
@@ -1086,7 +1090,7 @@ int SV_WriteDownloadToClient(client_t *cl, msg_t *msg)
 						// now that we know the file is referenced,
 						// check whether it's legal to download it
 						// or if it is a default pak.
-						pakType = FS_ReferencedPakType( Cmd_Argv(curindex), FS_ReferencedPakChecksum( curindex ), NULL );
+						pakType = FS_ReferencedPakType( Cmd_Argv(curindex), FS_ReferencedPakChecksum( curindex, vfs ), NULL );
 						break;
 					}
 				}

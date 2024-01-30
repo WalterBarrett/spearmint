@@ -534,13 +534,13 @@ S_MP3_CodecOpenStream
 =================
 */
 
-snd_stream_t *S_MP3_CodecOpenStream(const char *filename)
+snd_stream_t *S_MP3_CodecOpenStream(const char *filename, vfsNum_t vfs)
 {
 	snd_stream_t *stream;
 	struct snd_codec_mp3_info *mp3info;
 
 	// Open the stream
-	stream = S_CodecUtilOpen(filename, &mp3_codec);
+	stream = S_CodecUtilOpen(filename, &mp3_codec, vfs);
 	if(!stream || stream->length <= 0)
 		return NULL;
 
@@ -674,7 +674,7 @@ We handle S_MP3_CodecLoad as a special case of the streaming functions
 where we read the whole stream at once.
 ======================================================================
 */
-void *S_MP3_CodecLoad(const char *filename, snd_info_t *info)
+void *S_MP3_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs)
 {
 	snd_stream_t *stream;
 	byte *pcmbuffer;
@@ -683,7 +683,7 @@ void *S_MP3_CodecLoad(const char *filename, snd_info_t *info)
 	if(!filename)
 		return NULL;
 
-	stream = S_MP3_CodecOpenStream(filename);
+	stream = S_MP3_CodecOpenStream(filename, vfs);
 
 	if(!stream)
 		return NULL;

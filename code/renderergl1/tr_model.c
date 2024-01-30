@@ -79,7 +79,7 @@ qhandle_t R_RegisterMD3(const char *name, model_t *mod)
 		else
 			Com_sprintf(namebuf, sizeof(namebuf), "%s.%s", filename, fext);
 
-		ri.FS_ReadFile( namebuf, &buf.v );
+		ri.FS_ReadFile_VFS( namebuf, &buf.v, mod->vfs );
 		if(!buf.u)
 			continue;
 		
@@ -141,7 +141,7 @@ qhandle_t R_RegisterMDR(const char *name, model_t *mod)
 	qboolean loaded = qfalse;
 	int filesize;
 
-	filesize = ri.FS_ReadFile(name, (void **) &buf.v);
+	filesize = ri.FS_ReadFile_VFS(name, (void **) &buf.v, mod->vfs);
 	if(!buf.u)
 	{
 		mod->type = MOD_BAD;
@@ -178,7 +178,7 @@ qhandle_t R_RegisterMDS(const char *name, model_t *mod)
 	int	ident;
 	qboolean loaded = qfalse;
 
-	ri.FS_ReadFile(name, (void **) &buf.v);
+	ri.FS_ReadFile_VFS(name, (void **) &buf.v, mod->vfs);
 	if(!buf.u)
 	{
 		mod->type = MOD_BAD;
@@ -219,7 +219,7 @@ qhandle_t R_RegisterIQM(const char *name, model_t *mod)
 	qboolean loaded = qfalse;
 	int filesize;
 
-	filesize = ri.FS_ReadFile(name, (void **) &buf.v);
+	filesize = ri.FS_ReadFile_VFS(name, (void **) &buf.v, mod->vfs);
 	if(!buf.u)
 	{
 		mod->type = MOD_BAD;
@@ -253,7 +253,7 @@ qhandle_t R_RegisterTAN(const char *name, model_t *mod)
 	} buf;
 	qboolean loaded = qfalse;
 
-	ri.FS_ReadFile(name, (void **) &buf.v);
+	ri.FS_ReadFile_VFS(name, (void **) &buf.v, mod->vfs);
 	if(!buf.u)
 	{
 		mod->type = MOD_BAD;
@@ -347,7 +347,7 @@ optimization to prevent disk rescanning if they are
 asked for again.
 ====================
 */
-qhandle_t RE_RegisterModel( const char *name ) {
+qhandle_t RE_RegisterModel( const char *name, vfsNum_t vfs ) {
 	model_t		*mod;
 	qhandle_t	hModel;
 	qboolean	orgNameFailed = qfalse;
@@ -372,7 +372,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 	//
 	for ( hModel = 1 ; hModel < tr.numModels; hModel++ ) {
 		mod = tr.models[hModel];
-		if ( !strcmp( mod->name, name ) ) {
+		if ( !strcmp( mod->name, name ) && mod->vfs == vfs ) {
 			if( mod->type == MOD_BAD ) {
 				return 0;
 			}
@@ -389,6 +389,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 
 	// only set the name after the model has been successfully loaded
 	Q_strncpyz( mod->name, name, sizeof( mod->name ) );
+	mod->vfs = vfs;
 
 
 	R_IssuePendingRenderCommands();
@@ -580,7 +581,7 @@ static qboolean R_LoadMD3 (model_t *mod, int lod, void *buffer, const char *mod_
         for ( j = 0 ; j < surf->numShaders ; j++, shader++ ) {
             shader_t	*sh;
 
-            sh = R_FindShader( shader->name, LIGHTMAP_NONE, MIP_RAW_IMAGE );
+            sh = R_FindShader( shader->name, LIGHTMAP_NONE, MIP_RAW_IMAGE, mod->vfs );
 			if ( sh->defaultShader ) {
 				shader->shaderIndex = 0;
 			} else {
@@ -766,7 +767,7 @@ static qboolean R_LoadMDC( model_t *mod, int lod, void *buffer, const char *mod_
 		for ( j = 0 ; j < surf->numShaders ; j++, shader++ ) {
 			shader_t    *sh;
 
-			sh = R_FindShader( shader->name, LIGHTMAP_NONE, MIP_RAW_IMAGE );
+			sh = R_FindShader( shader->name, LIGHTMAP_NONE, MIP_RAW_IMAGE, mod->vfs );
 			if ( sh->defaultShader ) {
 				shader->shaderIndex = 0;
 			} else {
@@ -1222,7 +1223,7 @@ static qboolean R_LoadMDR( model_t *mod, void *buffer, int filesize, const char 
 			Q_strlwr( surf->name );
 
 			// register the shaders
-			sh = R_FindShader(surf->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE);
+			sh = R_FindShader(surf->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE, mod->vfs);
 			if ( sh->defaultShader ) {
 				surf->shaderIndex = 0;
 			} else {
@@ -1469,7 +1470,7 @@ static qboolean R_LoadMDS( model_t *mod, void *buffer, const char *mod_name ) {
 
 		// register the shaders
 		if ( surf->shader[0] ) {
-			sh = R_FindShader( surf->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE );
+			sh = R_FindShader( surf->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE, mod->vfs );
 			if ( sh->defaultShader ) {
 				surf->shaderIndex = 0;
 			} else {
@@ -1682,7 +1683,7 @@ static qboolean R_LoadMDM( model_t *mod, void *buffer, const char *mod_name ) {
 
 		// register the shaders
 		if ( surf->shader[0] ) {
-			sh = R_FindShader( surf->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE );
+			sh = R_FindShader( surf->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE, mod->vfs );
 			if ( sh->defaultShader ) {
 				surf->shaderIndex = 0;
 			} else {

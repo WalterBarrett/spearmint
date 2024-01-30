@@ -298,7 +298,7 @@ static void *GetLump( dheader_t *header, const void *src, int lump ) {
 	return (void*)( (byte*) src + header->lumps[ lump ].fileofs );
 }
 
-bspFile_t *BSP_LoadMOHAA( const bspFormat_t *format, const char *name, const void *data, int length ) {
+bspFile_t *BSP_LoadMOHAA( const bspFormat_t *format, const char *name, const void *data, int length, vfsNum_t vfs ) {
 	int				i, j, k;
 	dheader_t		header;
 	bspFile_t		*bsp;
@@ -312,6 +312,8 @@ bspFile_t *BSP_LoadMOHAA( const bspFormat_t *format, const char *name, const voi
 
 	bsp = malloc( sizeof ( bspFile_t ) );
 	Com_Memset( bsp, 0, sizeof ( bspFile_t ) );
+
+	bsp->vfs = vfs;
 
 	// ...
 	bsp->checksum = header.checksum;

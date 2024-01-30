@@ -349,7 +349,7 @@ static	void R_LoadLightmaps( const bspFile_t *bsp ) {
 
 	// get number of external lightmaps
 	if (tr.worldDir) {
-		ri.FS_ListFiles(tr.worldDir, ".tga", &numExternalLightmaps);
+		ri.FS_ListFiles_VFS(tr.worldDir, ".tga", &numExternalLightmaps, bsp->vfs);
 	}
 
 	if ( !bsp->numLightmaps ) {
@@ -427,7 +427,7 @@ static	void R_LoadLightmaps( const bspFile_t *bsp ) {
 		char filename[MAX_QPATH];
 
 		Com_sprintf(filename, sizeof(filename), "maps/%s/lm_0000.hdr", s_worldData.baseName);
-		if (ri.FS_FileExists(filename))
+		if (ri.FS_FileExists_VFS(filename, VFS_DEFAULT))
 			textureInternalFormat = GL_RGBA16;
 	}
 
@@ -438,10 +438,10 @@ static	void R_LoadLightmaps( const bspFile_t *bsp ) {
 
 		for (i = 0; i < tr.numLightmaps; i++)
 		{
-			tr.lightmaps[i] = R_CreateImage(va("_fatlightmap%d", i), NULL, width, height, IMGTYPE_COLORALPHA, imgFlags, textureInternalFormat);
+			tr.lightmaps[i] = R_CreateImage(va("_fatlightmap%d", i), NULL, width, height, IMGTYPE_COLORALPHA, imgFlags, textureInternalFormat, bsp->vfs);
 
 			if (tr.worldDeluxeMapping)
-				tr.deluxemaps[i] = R_CreateImage(va("_fatdeluxemap%d", i), NULL, width, height, IMGTYPE_DELUXE, imgFlags, 0);
+				tr.deluxemaps[i] = R_CreateImage(va("_fatdeluxemap%d", i), NULL, width, height, IMGTYPE_DELUXE, imgFlags, 0, bsp->vfs);
 		}
 	}
 
@@ -472,7 +472,7 @@ static	void R_LoadLightmaps( const bspFile_t *bsp ) {
 				Com_sprintf( filename, sizeof( filename ), "maps/%s/lm_%04d.hdr", s_worldData.baseName, i * (tr.worldDeluxeMapping ? 2 : 1) );
 				//ri.Printf(PRINT_ALL, "looking for %s\n", filename);
 
-				size = ri.FS_ReadFile(filename, (void **)&hdrLightmap);
+				size = ri.FS_ReadFile_VFS(filename, (void **)&hdrLightmap, bsp->vfs);
 			}
 
 			if (hdrLightmap)
@@ -518,7 +518,7 @@ static	void R_LoadLightmaps( const bspFile_t *bsp ) {
 			if (r_mergeLightmaps->integer)
 				R_UpdateSubImage(tr.lightmaps[lightmapnum], image, xoff, yoff, tr.lightmapSize, tr.lightmapSize, textureInternalFormat);
 			else
-				tr.lightmaps[i] = R_CreateImage(va("*lightmap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_COLORALPHA, imgFlags, textureInternalFormat );
+				tr.lightmaps[i] = R_CreateImage(va("*lightmap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_COLORALPHA, imgFlags, textureInternalFormat, bsp->vfs );
 
 			if (hdrLightmap)
 				ri.FS_FreeFile(hdrLightmap);
@@ -547,7 +547,7 @@ static	void R_LoadLightmaps( const bspFile_t *bsp ) {
 			if (r_mergeLightmaps->integer)
 				R_UpdateSubImage(tr.deluxemaps[lightmapnum], image, xoff, yoff, tr.lightmapSize, tr.lightmapSize, GL_RGBA8 );
 			else
-				tr.deluxemaps[i] = R_CreateImage(va("*deluxemap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_DELUXE, imgFlags, 0 );
+				tr.deluxemaps[i] = R_CreateImage(va("*deluxemap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_DELUXE, imgFlags, 0, bsp->vfs );
 		}
 	}
 
@@ -651,7 +651,7 @@ static	void R_LoadVisibility( const bspFile_t *bsp ) {
 ShaderForShaderNum
 ===============
 */
-static shader_t *ShaderForShaderNum( int shaderNum, int lightmapNum ) {
+static shader_t *ShaderForShaderNum( int shaderNum, int lightmapNum, vfsNum_t vfs ) {
 	shader_t	*shader;
 	dshader_t	*dsh;
 
@@ -669,7 +669,7 @@ static shader_t *ShaderForShaderNum( int shaderNum, int lightmapNum ) {
 		lightmapNum = LIGHTMAP_WHITEIMAGE;
 	}
 
-	shader = R_FindShader( dsh->shader, lightmapNum, MIP_RAW_IMAGE );
+	shader = R_FindShader( dsh->shader, lightmapNum, MIP_RAW_IMAGE, vfs );
 
 	// if the shader had errors, just use default shader
 	if ( shader->defaultShader ) {
@@ -795,7 +795,7 @@ static void FinishGenericSurface( dsurface_t *ds, vec3_t pt, cullinfo_t *cullinf
 ParseFace
 ===============
 */
-static void ParseFace( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, msurface_t *surf, int *indexes  ) {
+static void ParseFace( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, msurface_t *surf, int *indexes, vfsNum_t vfs  ) {
 	int			i, j;
 	srfBspSurface_t	*cv;
 	glIndex_t  *tri;
@@ -813,7 +813,7 @@ static void ParseFace( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, 
 	surf->fogIndex = ConvertBSPFogNum( ds->fogNum );
 
 	// get shader value
-	surf->shader = ShaderForShaderNum( ds->shaderNum, FatLightmap(realLightmapNum) );
+	surf->shader = ShaderForShaderNum( ds->shaderNum, FatLightmap(realLightmapNum), vfs );
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -905,7 +905,7 @@ static void ParseFace( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, 
 ParseMesh
 ===============
 */
-static void ParseMesh ( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, msurface_t *surf ) {
+static void ParseMesh ( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, msurface_t *surf, vfsNum_t vfs ) {
 	srfBspSurface_t	*grid = (srfBspSurface_t *)surf->data;
 	int				i;
 	int				width, height, numPoints;
@@ -921,7 +921,7 @@ static void ParseMesh ( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors,
 	surf->fogIndex = ConvertBSPFogNum( ds->fogNum );
 
 	// get shader value
-	surf->shader = ShaderForShaderNum( ds->shaderNum, FatLightmap(realLightmapNum) );
+	surf->shader = ShaderForShaderNum( ds->shaderNum, FatLightmap(realLightmapNum), vfs );
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -972,7 +972,7 @@ static void ParseMesh ( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors,
 ParseTriSurf
 ===============
 */
-static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, msurface_t *surf, int *indexes ) {
+static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, msurface_t *surf, int *indexes, vfsNum_t vfs ) {
 	srfBspSurface_t *cv;
 	glIndex_t  *tri;
 	int             i, j;
@@ -992,7 +992,7 @@ static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, float *hdrVertColor
 	surf->fogIndex = ConvertBSPFogNum( ds->fogNum );
 
 	// get shader
-	surf->shader = ShaderForShaderNum( ds->shaderNum, FatLightmap(realLightmapNum) );
+	surf->shader = ShaderForShaderNum( ds->shaderNum, FatLightmap(realLightmapNum), vfs );
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -1076,7 +1076,7 @@ ParseFoliage
 parses a foliage drawsurface
 ===============
 */
-static void ParseFoliage( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, msurface_t *surf, int *indexes ) {
+static void ParseFoliage( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, msurface_t *surf, int *indexes, vfsNum_t vfs ) {
 	int			i, j;
 	srfFoliage_t *cv;
 	glIndex_t  *tri;
@@ -1090,7 +1090,7 @@ static void ParseFoliage( dsurface_t *ds, drawVert_t *verts, float *hdrVertColor
 	surf->fogIndex = ConvertBSPFogNum( ds->fogNum );
 
 	// get shader
-	surf->shader = ShaderForShaderNum( ds->shaderNum, LIGHTMAP_BY_VERTEX );
+	surf->shader = ShaderForShaderNum( ds->shaderNum, LIGHTMAP_BY_VERTEX, vfs );
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -1222,7 +1222,7 @@ static void ParseFoliage( dsurface_t *ds, drawVert_t *verts, float *hdrVertColor
 ParseFlare
 ===============
 */
-static void ParseFlare( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int *indexes ) {
+static void ParseFlare( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int *indexes, vfsNum_t vfs ) {
 	srfFlare_t		*flare;
 	int				i;
 
@@ -1230,7 +1230,7 @@ static void ParseFlare( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int
 	surf->fogIndex = ConvertBSPFogNum( ds->fogNum );
 
 	// get shader
-	surf->shader = ShaderForShaderNum( ds->shaderNum, LIGHTMAP_BY_VERTEX );
+	surf->shader = ShaderForShaderNum( ds->shaderNum, LIGHTMAP_BY_VERTEX, vfs );
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -2002,7 +2002,7 @@ static	void R_LoadSurfaces( const bspFile_t *bsp ) {
 		Com_sprintf( filename, sizeof( filename ), "maps/%s/vertlight.raw", s_worldData.baseName);
 		//ri.Printf(PRINT_ALL, "looking for %s\n", filename);
 
-		size = ri.FS_ReadFile(filename, (void **)&hdrVertColors);
+		size = ri.FS_ReadFile_VFS(filename, (void **)&hdrVertColors, bsp->vfs);
 
 		if (hdrVertColors)
 		{
@@ -2048,27 +2048,27 @@ static	void R_LoadSurfaces( const bspFile_t *bsp ) {
 	for ( i = 0 ; i < count ; i++, in++, out++ ) {
 		switch ( LittleLong( in->surfaceType ) ) {
 		case MST_PATCH:
-			ParseMesh ( in, dv, hdrVertColors, out );
+			ParseMesh ( in, dv, hdrVertColors, out, bsp->vfs );
 			numMeshes++;
 			break;
 		case MST_TRIANGLE_SOUP:
-			ParseTriSurf( in, dv, hdrVertColors, out, indexes );
+			ParseTriSurf( in, dv, hdrVertColors, out, indexes, bsp->vfs );
 			numTriSurfs++;
 			break;
 		case MST_PLANAR:
-			ParseFace( in, dv, hdrVertColors, out, indexes );
+			ParseFace( in, dv, hdrVertColors, out, indexes, bsp->vfs );
 			numFaces++;
 			break;
 		case MST_FLARE:
-			ParseFlare( in, dv, out, indexes );
+			ParseFlare( in, dv, out, indexes, bsp->vfs );
 			numFlares++;
 			break;
 		case MST_FOLIAGE:
-			ParseFoliage( in, dv, hdrVertColors, out, indexes );
+			ParseFoliage( in, dv, hdrVertColors, out, indexes, bsp->vfs );
 			numFoliage++;
 			break;
 		case MST_TERRAIN:
-			ParseTriSurf( in, dv, hdrVertColors, out, indexes );
+			ParseTriSurf( in, dv, hdrVertColors, out, indexes, bsp->vfs );
 			numTerrain++;
 			break;
 		default:
@@ -2126,6 +2126,7 @@ static	void R_LoadSubmodels( const bspFile_t *bsp ) {
 		model->type = MOD_BRUSH;
 		model->bmodel = out;
 		Com_sprintf( model->name, sizeof( model->name ), "*%d", i );
+		model->vfs = bsp->vfs;
 
 		for (j=0 ; j<3 ; j++) {
 			out->bounds[0][j] = LittleFloat (in->mins[j]);
@@ -2451,7 +2452,7 @@ static	void R_LoadFogs( const bspFile_t *bsp ) {
 		}
 
 		// get information from the shader for fog parameters
-		shader = R_FindShader( fogs->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE );
+		shader = R_FindShader( fogs->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE, bsp->vfs );
 
 		out->shader = shader;
 
@@ -2553,7 +2554,7 @@ void R_LoadLightGrid( const bspFile_t *bsp ) {
 		Com_sprintf( filename, sizeof( filename ), "maps/%s/lightgrid.raw", s_worldData.baseName);
 		//ri.Printf(PRINT_ALL, "looking for %s\n", filename);
 
-		size = ri.FS_ReadFile(filename, (void **)&hdrLightGrid);
+		size = ri.FS_ReadFile_VFS(filename, (void **)&hdrLightGrid, bsp->vfs);
 
 		if (hdrLightGrid)
 		{
@@ -2615,7 +2616,9 @@ void R_LoadEntities( const bspFile_t *bsp ) {
 	char *p, *token, *s;
 	char keyname[MAX_TOKEN_CHARS];
 	char value[MAX_TOKEN_CHARS];
+	char adjtoken[MAX_TOKEN_CHARS];
 	world_t	*w;
+	vfsNum_t newVfs;
 
 	w = &s_worldData;
 	w->lightGridSize[0] = bsp->defaultLightGridSize[0];
@@ -2661,7 +2664,9 @@ void R_LoadEntities( const bspFile_t *bsp ) {
 			}
 			*s++ = 0;
 			if (r_vertexLight->integer) {
-				R_RemapShader(value, s, "0");
+				newVfs = bsp->vfs;
+				ri.FS_GetShaderTokenAndVFS(s, adjtoken, &newVfs);
+				R_RemapShader(value, s, "0", bsp->vfs, newVfs);
 			}
 			continue;
 		}
@@ -2674,7 +2679,9 @@ void R_LoadEntities( const bspFile_t *bsp ) {
 				break;
 			}
 			*s++ = 0;
-			R_RemapShader(value, s, "0");
+			newVfs = bsp->vfs;
+			ri.FS_GetShaderTokenAndVFS(s, adjtoken, &newVfs);
+			R_RemapShader(value, adjtoken, "0", bsp->vfs, newVfs);
 			continue;
 		}
 		// check for a different grid size
@@ -2785,7 +2792,7 @@ qboolean R_ParseSpawnVars( char *spawnVarChars, int maxSpawnVarChars, int *numSp
 	return qtrue;
 }
 
-void R_LoadEnvironmentJson(const char *baseName)
+void R_LoadEnvironmentJson(world_t s_worldData)
 {
 	char filename[MAX_QPATH];
 
@@ -2798,9 +2805,9 @@ void R_LoadEnvironmentJson(const char *baseName)
 	const char *cubemapArrayJson;
 	int filelen, i;
 
-	Com_sprintf(filename, MAX_QPATH, "cubemaps/%s/env.json", baseName);
+	Com_sprintf(filename, MAX_QPATH, "cubemaps/%s/env.json", s_worldData.baseName);
 
-	filelen = ri.FS_ReadFile(filename, &buffer.v);
+	filelen = ri.FS_ReadFile_VFS(filename, &buffer.v, s_worldData.vfs);
 	if (!buffer.c)
 		return;
 	bufferEnd = buffer.c + filelen;
@@ -2959,7 +2966,7 @@ void R_AssignCubemapsToWorldSurfaces(void)
 }
 
 
-void R_LoadCubemaps(void)
+void R_LoadCubemaps(const bspFile_t *bsp)
 {
 	int i;
 	imgFlags_t flags = IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_NOLIGHTSCALE | IMGFLAG_CUBEMAP;
@@ -2971,12 +2978,12 @@ void R_LoadCubemaps(void)
 
 		Com_sprintf(filename, MAX_QPATH, "cubemaps/%s/%03d.dds", tr.world->baseName, i);
 
-		cubemap->image = R_FindImageFile(filename, IMGTYPE_COLORALPHA, flags);
+		cubemap->image = R_FindImageFile(filename, IMGTYPE_COLORALPHA, flags, bsp->vfs);
 	}
 }
 
 
-void R_RenderMissingCubemaps(void)
+void R_RenderMissingCubemaps(const bspFile_t *bsp)
 {
 	int i, j;
 	imgFlags_t flags = IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_NOLIGHTSCALE | IMGFLAG_CUBEMAP;
@@ -2985,7 +2992,7 @@ void R_RenderMissingCubemaps(void)
 	{
 		if (!tr.cubemaps[i].image)
 		{
-			tr.cubemaps[i].image = R_CreateImage(va("*cubeMap%d", i), NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, flags, GL_RGBA8);
+			tr.cubemaps[i].image = R_CreateImage(va("*cubeMap%d", i), NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, flags, GL_RGBA8, bsp->vfs);
 
 			for (j = 0; j < 6; j++)
 			{
@@ -3104,6 +3111,8 @@ void RE_LoadWorldMap( const bspFile_t *bsp ) {
 
 	Q_strncpyz( s_worldData.baseName, COM_SkipPath( s_worldData.name ), sizeof( s_worldData.name ) );
 	COM_StripExtension(s_worldData.baseName, s_worldData.baseName, sizeof(s_worldData.baseName));
+
+	s_worldData.vfs = bsp->vfs;
 
 	startMarker = ri.Hunk_Alloc(0, h_low);
 	c_gridVerts = 0;
@@ -3315,7 +3324,7 @@ void RE_LoadWorldMap( const bspFile_t *bsp ) {
 	if (r_cubeMapping->integer)
 	{
 		// Try loading an env.json file first
-		R_LoadEnvironmentJson(s_worldData.baseName);
+		R_LoadEnvironmentJson(s_worldData);
 
 		if (!tr.numCubemaps)
 		{
@@ -3354,12 +3363,12 @@ void RE_LoadWorldMap( const bspFile_t *bsp ) {
 		tr.globalFogFarClip = shader->fogParms.farClip;
 	}
 
-	R_InitExternalShaders();
+	R_InitExternalShaders( bsp->vfs );
 
 	// Render or load all cubemaps
 	if (r_cubeMapping->integer && tr.numCubemaps && glRefConfig.framebufferObject)
 	{
-		R_LoadCubemaps();
-		R_RenderMissingCubemaps();
+		R_LoadCubemaps( bsp );
+		R_RenderMissingCubemaps( bsp );
 	}
 }

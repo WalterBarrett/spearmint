@@ -377,6 +377,8 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 
 	case G_FS_FOPEN_FILE:
 		return FS_FOpenFileByMode( VMA(1), VMA(2), args[3] );
+	case G_FS_FOPEN_FILE_VFS:
+		return FS_FOpenFileByMode_VFS( VMA(1), VMA(2), args[3], args[4] );
 	case G_FS_READ:
 		return FS_Read( VMA(1), args[2], args[3] );
 	case G_FS_WRITE:
@@ -390,13 +392,17 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 		return 0;
 	case G_FS_GETFILELIST:
 		return FS_GetFileListBuffer( VMA(1), VMA(2), VMA(3), args[4] );
+	case G_FS_GETFILELIST_VFS:
+		return FS_GetFileListBuffer_VFS( VMA(1), VMA(2), VMA(3), args[4], args[5] );
 	case G_FS_DELETE:
 		return FS_Delete( VMA(1) );
 	case G_FS_RENAME:
 		return FS_Rename( VMA(1), VMA(2) );
 
 	case G_PC_ADD_GLOBAL_DEFINE:
-		return PC_AddGlobalDefine( &game_globaldefines, VMA(1) );
+		return PC_AddGlobalDefine( &game_globaldefines, VMA(1), VFS_DEFAULT );
+	case G_PC_ADD_GLOBAL_DEFINE_VFS:
+		return PC_AddGlobalDefine( &game_globaldefines, VMA(1), args[0] );
 	case G_PC_REMOVE_GLOBAL_DEFINE:
 		PC_RemoveGlobalDefine( &game_globaldefines, VMA(1) );
 		return 0;
@@ -404,18 +410,24 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 		PC_RemoveAllGlobalDefines( &game_globaldefines );
 		return 0;
 	case G_PC_LOAD_SOURCE:
-		return PC_LoadSourceHandle( VMA(1), VMA(2), game_globaldefines );
+		return PC_LoadSourceHandle( VMA(1), VMA(2), game_globaldefines, VFS_DEFAULT );
+	case G_PC_LOAD_SOURCE_VFS:
+		return PC_LoadSourceHandle( VMA(1), VMA(2), game_globaldefines, args[4] );
 	case G_PC_FREE_SOURCE:
 		return PC_FreeSourceHandle( args[1] );
 	case G_PC_ADD_DEFINE:
-		return PC_AddDefineHandle( args[1], VMA(2) );
+		return PC_AddDefineHandle( args[1], VMA(2), VFS_DEFAULT );
+	case G_PC_ADD_DEFINE_VFS:
+		return PC_AddDefineHandle( args[1], VMA(2), args[3] );
 	case G_PC_READ_TOKEN:
 		return PC_ReadTokenHandle( args[1], VMA(2) );
 	case G_PC_UNREAD_TOKEN:
 		PC_UnreadLastTokenHandle( args[1] );
 		return 0;
 	case G_PC_SOURCE_FILE_AND_LINE:
-		return PC_SourceFileAndLine( args[1], VMA(2), VMA(3) );
+		return PC_SourceFileAndLine( args[1], VMA(2), VMA(3), NULL );
+	case G_PC_SOURCE_FILE_AND_LINE_VFS:
+		return PC_SourceFileAndLine( args[1], VMA(2), VMA(3), VMA(4) );
 
 	case G_HEAP_MALLOC:
 		return VM_HeapMalloc( args[1] );
@@ -533,7 +545,9 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 		return 0;
 
 	case G_R_REGISTERMODEL:
-		return re.RegisterModel( VMA(1) );
+		return re.RegisterModel( VMA(1), VFS_DEFAULT );
+	case G_R_REGISTERMODEL_VFS:
+		return re.RegisterModel( VMA(1), args[2] );
 	case G_R_LERPTAG:
 		return re.LerpTag( VMA(1), args[2], 0, args[3], 0, args[4], VMF(5), VMA(6), NULL, NULL, 0, 0, 0, 0, 0 );
 	case G_R_LERPTAG_FRAMEMODEL:

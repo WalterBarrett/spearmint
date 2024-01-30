@@ -233,7 +233,7 @@ const ov_callbacks S_OGG_Callbacks =
 S_OGG_CodecOpenStream
 =================
 */
-snd_stream_t *S_OGG_CodecOpenStream(const char *filename)
+snd_stream_t *S_OGG_CodecOpenStream(const char *filename, vfsNum_t vfs)
 {
 	snd_stream_t *stream;
 
@@ -251,7 +251,7 @@ snd_stream_t *S_OGG_CodecOpenStream(const char *filename)
 	}
 
 	// Open the stream
-	stream = S_CodecUtilOpen(filename, &ogg_codec);
+	stream = S_CodecUtilOpen(filename, &ogg_codec, vfs);
 	if(!stream)
 	{
 		return NULL;
@@ -426,7 +426,7 @@ We handle S_OGG_CodecLoad as a special case of the streaming functions
 where we read the whole stream at once.
 ======================================================================
 */
-void *S_OGG_CodecLoad(const char *filename, snd_info_t *info)
+void *S_OGG_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs)
 {
 	snd_stream_t *stream;
 	byte *buffer;
@@ -439,7 +439,7 @@ void *S_OGG_CodecLoad(const char *filename, snd_info_t *info)
 	}
 	
 	// open the file as a stream
-	stream = S_OGG_CodecOpenStream(filename);
+	stream = S_OGG_CodecOpenStream(filename, vfs);
 	if(!stream)
 	{
 		return NULL;

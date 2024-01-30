@@ -222,7 +222,7 @@ const OpusFileCallbacks S_OggOpus_Callbacks =
 S_OggOpus_CodecOpenStream
 =================
 */
-snd_stream_t *S_OggOpus_CodecOpenStream(const char *filename)
+snd_stream_t *S_OggOpus_CodecOpenStream(const char *filename, vfsNum_t vfs)
 {
 	snd_stream_t *stream;
 
@@ -240,7 +240,7 @@ snd_stream_t *S_OggOpus_CodecOpenStream(const char *filename)
 	}
 
 	// Open the stream
-	stream = S_CodecUtilOpen(filename, &opus_codec);
+	stream = S_CodecUtilOpen(filename, &opus_codec, vfs);
 	if(!stream)
 	{
 		return NULL;
@@ -400,7 +400,7 @@ We handle S_OggOpus_CodecLoad as a special case of the streaming functions
 where we read the whole stream at once.
 ======================================================================
 */
-void *S_OggOpus_CodecLoad(const char *filename, snd_info_t *info)
+void *S_OggOpus_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs)
 {
 	snd_stream_t *stream;
 	byte *buffer;
@@ -413,7 +413,7 @@ void *S_OggOpus_CodecLoad(const char *filename, snd_info_t *info)
 	}
 	
 	// open the file as a stream
-	stream = S_OggOpus_CodecOpenStream(filename);
+	stream = S_OggOpus_CodecOpenStream(filename, vfs);
 	if(!stream)
 	{
 		return NULL;

@@ -30,6 +30,7 @@ Suite 120, Rockville, Maryland 20850 USA.
 // cl_cgame.c  -- client system interaction with client game
 
 #include "client.h"
+#include "../qcommon/qcommon.h"
 
 #include "../botlib/l_script.h"
 #include "../botlib/l_precomp.h"
@@ -1160,6 +1161,7 @@ void CL_ShutdownCGame( void ) {
 	cls.cgameBsp = NULL;
 }
 
+
 /*
 ====================
 CL_CgameSystemCalls
@@ -1168,6 +1170,13 @@ The cgame module is making a system call
 ====================
 */
 intptr_t CL_CgameSystemCalls( intptr_t *args ) {
+	char adjpath[MAX_QPATH];
+	char adjpath2[MAX_QPATH];
+	char adjtoken[MAX_TOKEN_CHARS];
+	char adjtoken2[MAX_TOKEN_CHARS];
+	vfsNum_t vfs = VFS_DEFAULT;
+	vfsNum_t vfs2 = VFS_DEFAULT;
+
 	switch( args[0] ) {
 	case CG_PRINT:
 		Com_Printf( "%s", (const char*)VMA(1) );
@@ -1224,6 +1233,8 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return 0;
 	case CG_FS_FOPENFILE:
 		return FS_FOpenFileByMode( VMA(1), VMA(2), args[3] );
+	case CG_FS_FOPENFILE_VFS:
+		return FS_FOpenFileByMode_VFS( VMA(1), VMA(2), args[3], args[4] );
 	case CG_FS_READ:
 		return FS_Read( VMA(1), args[2], args[3] );
 	case CG_FS_WRITE:
@@ -1237,6 +1248,8 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return 0;
 	case CG_FS_GETFILELIST:
 		return FS_GetFileListBuffer( VMA(1), VMA(2), VMA(3), args[4] );
+	case CG_FS_GETFILELIST_VFS:
+		return FS_GetFileListBuffer_VFS( VMA(1), VMA(2), VMA(3), args[4], args[5] );
 	case CG_FS_DELETE:
 		return FS_Delete( VMA(1) );
 	case CG_FS_RENAME:
@@ -1339,23 +1352,39 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		S_Respatialize( args[1], VMA(2), VMA(3), args[4], args[5] );
 		return 0;
 	case CG_S_REGISTERSOUND:
-		return S_RegisterSound( VMA(1), args[2] );
+		FS_GetQPathAndVFS(VMA(1), adjpath, &vfs);
+		return S_RegisterSound( adjpath, args[2], vfs );
+	case CG_S_REGISTERSOUND_VFS:
+		return S_RegisterSound( VMA(1), args[2], args[3] );
 	case CG_S_SOUNDDURATION:
 		return S_SoundDuration( args[1] );
 	case CG_S_STARTBACKGROUNDTRACK:
-		S_StartBackgroundTrack( VMA(1), VMA(2), VMF(3), VMF(4) );
+		FS_GetQPathAndVFS(VMA(1), adjpath, &vfs);
+		FS_GetQPathAndVFS(VMA(2), adjpath2, &vfs2);
+		S_StartBackgroundTrack( adjpath, adjpath2, VMF(3), VMF(4), vfs, vfs2 );
+		return 0;
+	case CG_S_STARTBACKGROUNDTRACK_VFS:
+		S_StartBackgroundTrack( VMA(1), VMA(2), VMF(3), VMF(4), args[5], args[6] );
 		return 0;
 	case CG_S_STOPBACKGROUNDTRACK:
 		S_StopBackgroundTrack();
 		return 0;
 	case CG_S_STARTSTREAMINGSOUND:
-		S_StartStreamingSound( args[1], args[2], VMA(3), VMF(4) );
+		FS_GetQPathAndVFS(VMA(3), adjpath, &vfs);
+		S_StartStreamingSound( args[1], args[2], adjpath, VMF(4), vfs );
+		return 0;
+	case CG_S_STARTSTREAMINGSOUND_VFS:
+		S_StartStreamingSound( args[1], args[2], VMA(3), VMF(4), args[5] );
 		return 0;
 	case CG_S_STOPSTREAMINGSOUND:
 		S_StopStreamingSound( args[1] );
 		return 0;
 	case CG_S_QUEUESTREAMINGSOUND:
-		S_QueueStreamingSound( args[1], VMA(2), VMF(3) );
+		FS_GetQPathAndVFS(VMA(2), adjpath, &vfs);
+		S_QueueStreamingSound( args[1], adjpath, VMF(3), vfs );
+		return 0;
+	case CG_S_QUEUESTREAMINGSOUND_VFS:
+		S_QueueStreamingSound( args[1], VMA(2), VMF(3), args[4] );
 		return 0;
 	case CG_S_GETSTREAMPLAYCOUNT:
 		return S_GetStreamPlayCount( args[1] );
@@ -1369,13 +1398,25 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		CL_LoadWorldMap( VMA(1) );
 		return 0;
 	case CG_R_REGISTERMODEL:
-		return re.RegisterModel( VMA(1) );
+		FS_GetQPathAndVFS(VMA(1), adjpath, &vfs);
+		return re.RegisterModel( adjpath, vfs );
+	case CG_R_REGISTERMODEL_VFS:
+		return re.RegisterModel( VMA(1), args[2] );
 	case CG_R_REGISTERSHADEREX:
-		return re.RegisterShaderEx( VMA(1), args[2], args[3] );
+		FS_GetShaderTokenAndVFS(VMA(1), adjtoken, &vfs);
+		return re.RegisterShaderEx( adjtoken, args[2], args[3], vfs );
+	case CG_R_REGISTERSHADEREX_VFS:
+		return re.RegisterShaderEx( VMA(1), args[2], args[3], args[4] );
 	case CG_R_REGISTERSHADER:
-		return re.RegisterShader( VMA(1) );
+		FS_GetShaderTokenAndVFS(VMA(1), adjtoken, &vfs);
+		return re.RegisterShader( adjtoken, vfs );
+	case CG_R_REGISTERSHADER_VFS:
+		return re.RegisterShader( VMA(1), args[2] );
 	case CG_R_REGISTERSHADERNOMIP:
-		return re.RegisterShaderNoMip( VMA(1) );
+		FS_GetShaderTokenAndVFS(VMA(1), adjtoken, &vfs);
+		return re.RegisterShaderNoMip( adjtoken, vfs );
+	case CG_R_REGISTERSHADERNOMIP_VFS:
+		return re.RegisterShaderNoMip( VMA(1), args[2] );
 	case CG_R_REGISTERFONT:
 		re.RegisterFont( VMA(1), args[2], VMF(3), args[4], VMA(5), args[6]);
 		return 0;
@@ -1658,7 +1699,9 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 
 
 	case CG_PC_ADD_GLOBAL_DEFINE:
-		return PC_AddGlobalDefine( &cgame_globaldefines, VMA(1) );
+		return PC_AddGlobalDefine( &cgame_globaldefines, VMA(1), VFS_DEFAULT ); // TODO: Should this use VFS_DEFAULT or FS_GetNameAndVFS?
+	case CG_PC_ADD_GLOBAL_DEFINE_VFS:
+		return PC_AddGlobalDefine( &cgame_globaldefines, VMA(1), args[2] );
 	case CG_PC_REMOVE_GLOBAL_DEFINE:
 		PC_RemoveGlobalDefine( &cgame_globaldefines, VMA(1) );
 		return 0;
@@ -1666,18 +1709,26 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		PC_RemoveAllGlobalDefines( &cgame_globaldefines );
 		return 0;
 	case CG_PC_LOAD_SOURCE:
-		return PC_LoadSourceHandle( VMA(1), VMA(2), cgame_globaldefines );
+		FS_GetQPathAndVFS(VMA(2), adjpath2, &vfs);
+		FS_GetQPathAndVFS(VMA(1), adjpath, &vfs);
+		return PC_LoadSourceHandle( adjpath, adjpath2, cgame_globaldefines, vfs );
+	case CG_PC_LOAD_SOURCE_VFS:
+		return PC_LoadSourceHandle( VMA(1), VMA(2), cgame_globaldefines, args[4] );
 	case CG_PC_FREE_SOURCE:
 		return PC_FreeSourceHandle( args[1] );
 	case CG_PC_ADD_DEFINE:
-		return PC_AddDefineHandle( args[1], VMA(2) );
+		return PC_AddDefineHandle( args[1], VMA(2), VFS_DEFAULT ); // TODO: Should this use VFS_DEFAULT or FS_GetNameAndVFS?
+	case CG_PC_ADD_DEFINE_VFS:
+		return PC_AddDefineHandle( args[1], VMA(2), args[3] );
 	case CG_PC_READ_TOKEN:
 		return PC_ReadTokenHandle( args[1], VMA(2) );
 	case CG_PC_UNREAD_TOKEN:
 		PC_UnreadLastTokenHandle( args[1] );
 		return 0;
 	case CG_PC_SOURCE_FILE_AND_LINE:
-		return PC_SourceFileAndLine( args[1], VMA(2), VMA(3) );
+		return PC_SourceFileAndLine( args[1], VMA(2), VMA(3), NULL );
+	case CG_PC_SOURCE_FILE_AND_LINE_VFS:
+		return PC_SourceFileAndLine( args[1], VMA(2), VMA(3), VMA(4) );
 
 	case CG_HEAP_MALLOC:
 		return VM_HeapMalloc( args[1] );
@@ -1694,7 +1745,10 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return 0;
 
 	case CG_CIN_PLAYCINEMATIC:
-	  return CIN_PlayCinematic(VMA(1), args[2], args[3], args[4], args[5], args[6]);
+	  FS_GetQPathAndVFS(VMA(1), adjpath, &vfs);
+	  return CIN_PlayCinematic(adjpath, args[2], args[3], args[4], args[5], args[6], vfs);
+	case CG_CIN_PLAYCINEMATIC_VFS:
+	  return CIN_PlayCinematic(VMA(1), args[2], args[3], args[4], args[5], args[6], args[7]);
 
 	case CG_CIN_STOPCINEMATIC:
 	  return CIN_StopCinematic(args[1]);
@@ -1711,7 +1765,12 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	  return 0;
 
 	case CG_R_REMAP_SHADER:
-		re.RemapShader( VMA(1), VMA(2), VMA(3) );
+		FS_GetShaderTokenAndVFS(VMA(1), adjtoken, &vfs);
+		FS_GetShaderTokenAndVFS(VMA(2), adjtoken2, &vfs2);
+		re.RemapShader( adjtoken, adjtoken2, VMA(3), vfs, vfs2 );
+		return 0;
+	case CG_R_REMAP_SHADER_VFS:
+		re.RemapShader( VMA(1), VMA(2), VMA(3), args[4], args[5] );
 		return 0;
 
 /*
@@ -1731,10 +1790,17 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return re.inPVS( VMA(1), VMA(2) );
 
 	case CG_R_SET_SURFACE_SHADER:
-		re.SetSurfaceShader( args[1], VMA(2) );
+		FS_GetShaderTokenAndVFS(VMA(2), adjtoken, &vfs);
+		re.SetSurfaceShader( args[1], adjtoken, vfs );
+		return 0;
+	case CG_R_SET_SURFACE_SHADER_VFS:
+		re.SetSurfaceShader( args[1], VMA(2), args[3] );
 		return 0;
 	case CG_R_GET_SURFACE_SHADER:
-		return re.GetSurfaceShader( args[1], args[2] );
+		// TODO: Should this use the VFS of the current map?
+		return re.GetSurfaceShader( args[1], args[2], vfs );
+	case CG_R_GET_SURFACE_SHADER_VFS:
+		return re.GetSurfaceShader( args[1], args[2], args[3] );
 	case CG_R_GET_SHADER_FROM_MODEL:
 		return re.GetShaderFromModel( args[1], args[2], args[3] );
 	case CG_R_GET_SHADER_NAME:

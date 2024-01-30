@@ -224,7 +224,7 @@ struct BufferedFile
  *  Read a file into a buffer.
  */
 
-static struct BufferedFile *ReadBufferedFile(const char *name)
+static struct BufferedFile *ReadBufferedFile(const char *name, vfsNum_t vfs)
 {
 	struct BufferedFile *BF;
 	union {
@@ -264,7 +264,7 @@ static struct BufferedFile *ReadBufferedFile(const char *name)
 	 *  Read the file.
 	 */
 
-	BF->Length = ri.FS_ReadFile((char *) name, &buffer.v);
+	BF->Length = ri.FS_ReadFile_VFS((char *) name, &buffer.v, vfs);
 	BF->Buffer = buffer.b;
 
 	/*
@@ -1912,7 +1912,7 @@ static qboolean DecodeImageInterlaced(struct PNG_Chunk_IHDR *IHDR,
  *  The PNG loader
  */
 
-void R_LoadPNG(const char *name, int *numTexLevels, textureLevel_t **pic)
+void R_LoadPNG(const char *name, int *numTexLevels, textureLevel_t **pic, vfsNum_t vfs)
 {
 	struct BufferedFile *ThePNG;
 	byte *OutBuffer;
@@ -1962,7 +1962,7 @@ void R_LoadPNG(const char *name, int *numTexLevels, textureLevel_t **pic)
 	 *  Read the file.
 	 */
 
-	ThePNG = ReadBufferedFile(name);
+	ThePNG = ReadBufferedFile(name, vfs);
 	if(!ThePNG)
 	{
 		return;
@@ -2618,7 +2618,7 @@ void RE_SavePNG(const char *filename, int width, int height, byte *data, int pad
 	PNG_ChunkCRC			CRC;
 	void					*crcPtr;
 	int						numtEXt = 0;
-	#define					NUMTEXT 5+MAX_SPLITVIEW*2
+	#define					NUMTEXT 6+MAX_SPLITVIEW*2
 	struct
 	{
 		char key[80]; // PNG limits to 79+'\0'.

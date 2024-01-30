@@ -193,6 +193,7 @@ typedef struct script_s
 	punctuation_t **punctuationtable;
 	token_t token;					//available token
 	struct script_s *next;			//next script in a chain
+	vfsNum_t vfs;
 } script_t;
 
 //read a token from the script
@@ -236,9 +237,13 @@ int EndOfScript(script_t *script);
 //returns a pointer to the punctuation with the given number
 char *PunctuationFromNum(script_t *script, int num);
 //load a script from the given file at the given offset with the given length
-script_t *LoadScriptFile(const char *filename);
+script_t *LoadScriptFile(const char *filename, vfsNum_t vfs);
 //load a script from the given memory with the given length
+#ifndef BSPC
+script_t *LoadScriptMemory(const char *ptr, int length, const char *name, vfsNum_t vfs);
+#else
 script_t *LoadScriptMemory(const char *ptr, int length, const char *name);
+#endif
 //free a script
 void FreeScript(script_t *script);
 //set the base folder to load files from

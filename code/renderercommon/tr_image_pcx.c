@@ -56,7 +56,7 @@ typedef struct {
 	unsigned char	data[];
 } pcx_t;
 
-void R_LoadPCX ( const char *filename, int *numTexLevels, textureLevel_t **pic)
+void R_LoadPCX ( const char *filename, int *numTexLevels, textureLevel_t **pic, vfsNum_t vfs)
 {
 	union {
 		byte *b;
@@ -79,7 +79,7 @@ void R_LoadPCX ( const char *filename, int *numTexLevels, textureLevel_t **pic)
 	//
 	// load the file
 	//
-	len = ri.FS_ReadFile( ( char * ) filename, &raw.v);
+	len = ri.FS_ReadFile_VFS( ( char * ) filename, &raw.v, vfs);
 	if (!raw.b || len < 0) {
 		return;
 	}

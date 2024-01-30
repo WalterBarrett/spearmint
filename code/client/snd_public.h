@@ -37,12 +37,12 @@ void S_Shutdown( void );
 void S_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx );
 void S_StartLocalSound( sfxHandle_t sfx, int channelNum );
 
-void S_StartBackgroundTrack( const char *intro, const char *loop, float volume, float loopVolume );
+void S_StartBackgroundTrack( const char *intro, const char *loop, float volume, float loopVolume, vfsNum_t introVfs, vfsNum_t loopVfs );
 void S_StopBackgroundTrack( void );
 
-void S_StartStreamingSound( int stream, int entityNum, const char *filename, float volume );
+void S_StartStreamingSound( int stream, int entityNum, const char *filename, float volume, vfsNum_t vfs );
 void S_StopStreamingSound( int stream );
-void S_QueueStreamingSound( int stream, const char *filename, float volume );
+void S_QueueStreamingSound( int stream, const char *filename, float volume, vfsNum_t vfs );
 int  S_GetStreamPlayCount( int stream );
 void S_SetStreamVolume( int stream, float volume );
 
@@ -76,7 +76,7 @@ void S_BeginRegistration( void );
 // RegisterSound will allways return a valid sample, even if it
 // has to create a placeholder.  This prevents continuous filesystem
 // checks for missing files
-sfxHandle_t	S_RegisterSound( const char *sample, qboolean compressed );
+sfxHandle_t	S_RegisterSound( const char *sample, qboolean compressed, vfsNum_t vfs );
 
 int S_SoundDuration( sfxHandle_t handle );
 

@@ -577,7 +577,7 @@ void	SCR_AdjustFrom640( float *x, float *y, float *w, float *h );
 // cl_cin.c
 //
 
-int CIN_PlayCinematic( const char *arg0, int xpos, int ypos, int width, int height, int bits);
+int CIN_PlayCinematic( const char *arg0, int xpos, int ypos, int width, int height, int bits, vfsNum_t vfs );
 e_status CIN_StopCinematic(int handle);
 e_status CIN_RunCinematic (int handle);
 void CIN_DrawCinematic (int handle);

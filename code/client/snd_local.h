@@ -69,6 +69,7 @@ typedef struct sfx_s {
 	int				lastTimeUsed;
 	int				duration;
 	struct sfx_s	*next;
+	vfsNum_t		vfs;
 } sfx_t;
 
 typedef struct {
@@ -138,11 +139,11 @@ typedef struct
 	void (*Shutdown)(void);
 	void (*StartSound)( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx );
 	void (*StartLocalSound)( sfxHandle_t sfx, int channelNum );
-	void (*StartBackgroundTrack)( const char *intro, const char *loop, float volume, float loopVolume );
+	void (*StartBackgroundTrack)( const char *intro, const char *loop, float volume, float loopVolume, vfsNum_t introVfs, vfsNum_t loopVfs );
 	void (*StopBackgroundTrack)( void );
-	void (*StartStreamingSound)( int stream, int entityNum, const char *filename, float volume );
+	void (*StartStreamingSound)( int stream, int entityNum, const char *filename, float volume, vfsNum_t vfs );
 	void (*StopStreamingSound)( int stream );
-	void (*QueueStreamingSound)( int stream, const char *filename, float volume );
+	void (*QueueStreamingSound)( int stream, const char *filename, float volume, vfsNum_t vfs );
 	int  (*GetStreamPlayCount)( int stream );
 	void (*SetStreamVolume)( int stream, float volume );
 	void (*RawSamples)(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum);
@@ -156,7 +157,7 @@ typedef struct
 	void (*Update)( void );
 	void (*DisableSounds)( void );
 	void (*BeginRegistration)( void );
-	sfxHandle_t (*RegisterSound)( const char *sample, qboolean compressed );
+	sfxHandle_t (*RegisterSound)( const char *sample, qboolean compressed, vfsNum_t vfs );
 	int  (*SoundDuration)( sfxHandle_t handle );
 	void (*ClearSoundBuffer)( void );
 	void (*SoundInfo)( void );

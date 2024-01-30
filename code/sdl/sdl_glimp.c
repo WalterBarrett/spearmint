@@ -419,7 +419,7 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qbool
 	if ( r_forceWindowIcon32->integer ) {
 		int numLevels;
 
-		R_LoadImage( "windowicon32", &numLevels, &iconPic );
+		R_LoadImage( "windowicon32", &numLevels, &iconPic, VFS_DEFAULT );
 
 		if ( iconPic && ( iconPic[0].width != 32 || iconPic[0].height != 32 ) ) {
 			ri.Free( iconPic );
@@ -430,7 +430,7 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qbool
 		int numLevels;
 
 		// try to load high resolution icon
-		R_LoadImage( "windowicon", &numLevels, &iconPic );
+		R_LoadImage( "windowicon", &numLevels, &iconPic, VFS_DEFAULT );
 	}
 
 	if ( iconPic ) {

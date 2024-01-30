@@ -69,17 +69,16 @@ textureMode_t modes[] = {
 return a hash value for the filename
 ================
 */
-static long generateHashValue( const char *fname ) {
-	int		i;
-	long	hash;
+static long generateHashValue( const char *fname, vfsNum_t vfs ) {
+	int		i = 1;
+	long	hash = (long)(' ' + vfs)*119;
 	char	letter;
 
-	hash = 0;
-	i = 0;
 	while (fname[i] != '\0') {
 		letter = tolower(fname[i]);
 		if (letter =='.') break;				// don't include extension
 		if (letter =='\\') letter = '/';		// damn path names
+		if (letter == PATH_SEP) letter = '/';	// damn path names
 		hash+=(long)(letter)*(i+119);
 		i++;
 	}
@@ -273,7 +272,7 @@ void R_ImageList_f( void ) {
 			sizeSuffix = "Gb";
 		}
 
-		ri.Printf(PRINT_ALL, "%4i: %4ix%4i %s %4i%s %s\n", i, image->uploadWidth, image->uploadHeight, format, displaySize, sizeSuffix, image->imgName);
+		ri.Printf(PRINT_ALL, "%4i: %4ix%4i %s %4i%s %s %s\n", i, image->uploadWidth, image->uploadHeight, format, displaySize, sizeSuffix, image->imgName, ri.VFS_StringFromNum(image->vfs));
 		estTotalSize += estSize;
 	}
 
@@ -636,7 +635,7 @@ static void Upload32( int numTexLevels, const textureLevel_t *pics,
 		// failed to upload all levels
 		ri.Error(ERR_DROP, "Unsupported Texture format: %8x", pics[0].format );
 		// ZTM: TODO: Pass image to Upload32 in OpenGL1 too
-		//ri.Error(ERR_DROP, "Unsupported Texture format: %x for %s", pics[0].format, image->imgName );
+		//ri.Error(ERR_DROP, "Unsupported Texture format: %x for %s%s", pics[0].format, image->imgName, ri.VFS_Lang_FromVFSName(image->vfs) );
 	} else {
 		data = pics[baseLevel].data;
 	}
@@ -914,7 +913,7 @@ This is the only way any image_t are created
 ================
 */
 image_t *R_CreateImage( const char *name, byte *pic, int width, int height,
-		imgType_t type, imgFlags_t flags, int internalFormat ) {
+		imgType_t type, imgFlags_t flags, int internalFormat, vfsNum_t vfs ) {
 	textureLevel_t texLevel;
 
 	texLevel.format = GL_RGBA8;
@@ -923,7 +922,7 @@ image_t *R_CreateImage( const char *name, byte *pic, int width, int height,
 	texLevel.size = width * height * 4;
 	texLevel.data = pic;
 
-	return R_CreateImage2( name, 1, &texLevel, type, flags, internalFormat );
+	return R_CreateImage2( name, 1, &texLevel, type, flags, internalFormat, vfs );
 }
 
 /*
@@ -934,7 +933,7 @@ This is the only way any image_t are created
 ================
 */
 image_t *R_CreateImage2( const char *name, int numTexLevels, const textureLevel_t *pic,
-		imgType_t type, imgFlags_t flags, int internalFormat ) {
+		imgType_t type, imgFlags_t flags, int internalFormat, vfsNum_t vfs ) {
 	image_t		*image;
 	qboolean	isLightmap = qfalse;
 	int			picmip;
@@ -960,6 +959,7 @@ image_t *R_CreateImage2( const char *name, int numTexLevels, const textureLevel_
 	image->flags = flags;
 
 	strcpy (image->imgName, name);
+	image->vfs = vfs;
 
 	image->width = pic[0].width;
 	image->height = pic[0].height;
@@ -1007,7 +1007,7 @@ image_t *R_CreateImage2( const char *name, int numTexLevels, const textureLevel_
 		GL_SelectTexture( 0 );
 	}
 
-	hash = generateHashValue(name);
+	hash = generateHashValue(name, vfs);
 	image->next = hashTable[hash];
 	hashTable[hash] = image;
 
@@ -1019,7 +1019,7 @@ image_t *R_CreateImage2( const char *name, int numTexLevels, const textureLevel_
 typedef struct
 {
 	char *ext;
-	void (*ImageLoader)( const char *, int *, textureLevel_t ** );
+	void (*ImageLoader)( const char *, int *, textureLevel_t **, vfsNum_t );
 } imageExtToLoaderMap_t;
 
 // Note that the ordering indicates the order of preference used
@@ -1046,7 +1046,7 @@ Loads any of the supported image types into a canonical
 32 bit format.
 =================
 */
-void R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic )
+void R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs )
 {
 	qboolean orgNameFailed = qfalse;
 	int orgLoader = -1;
@@ -1070,7 +1070,7 @@ void R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic )
 			if( !Q_stricmp( ext, imageLoaders[ i ].ext ) )
 			{
 				// Load
-				imageLoaders[ i ].ImageLoader( localName, numLevels, pic );
+				imageLoaders[ i ].ImageLoader( localName, numLevels, pic, vfs );
 				break;
 			}
 		}
@@ -1104,7 +1104,7 @@ void R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic )
 		altName = va( "%s.%s", localName, imageLoaders[ i ].ext );
 
 		// Load
-		imageLoaders[ i ].ImageLoader( altName, numLevels, pic );
+		imageLoaders[ i ].ImageLoader( altName, numLevels, pic, vfs );
 
 		if( *pic )
 		{
@@ -1128,28 +1128,33 @@ Finds or loads the given image.
 Returns NULL if it fails, not a default image.
 ==============
 */
-image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
+image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags, vfsNum_t vfs )
 {
 	image_t	*image;
 	int	numLevels;
 	textureLevel_t	*pic;
 	long	hash;
+	qboolean	isWhiteImage;
+	char	adjustedName[MAX_QPATH];
 
 	if (!name) {
 		return NULL;
 	}
+	
+	ri.FS_GetQPathAndVFS(name, adjustedName, &vfs);
 
-	hash = generateHashValue(name);
+	hash = generateHashValue(adjustedName, vfs);
 
 	//
 	// see if the image is already loaded
 	//
+	isWhiteImage = !strcmp( adjustedName, "*white" );
 	for (image=hashTable[hash]; image; image=image->next) {
-		if ( !strcmp( name, image->imgName ) ) {
+		if ( !strcmp( adjustedName, image->imgName ) && (isWhiteImage || image->vfs == vfs) ) {
 			// the white image can be used with any set of parms, but other mismatches are errors
-			if ( strcmp( name, "*white" ) ) {
+			if ( !isWhiteImage ) {
 				if ( image->flags != flags ) {
-					ri.Printf( PRINT_DEVELOPER, "WARNING: reused image %s with mixed flags (%i vs %i)\n", name, image->flags, flags );
+					ri.Printf( PRINT_DEVELOPER, "WARNING: reused image %s%s with mixed flags (%i vs %i)\n", adjustedName, ri.VFS_Lang_FromVFSName(vfs), image->flags, flags );
 				}
 			}
 			return image;
@@ -1159,8 +1164,9 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 	//
 	// load the pic from disk
 	//
-	R_LoadImage( name, &numLevels, &pic );
+	R_LoadImage( adjustedName, &numLevels, &pic, vfs );
 	if ( pic == NULL ) {
+		ri.Printf( PRINT_ERROR, "ERROR: Could not find image %s%s.\n", adjustedName, ri.VFS_Lang_FromVFSName(vfs) );
 		return NULL;
 	}
 
@@ -1169,7 +1175,7 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 		R_ProcessLightmap( (byte**)&pic[0].data, 4, pic[0].width, pic[0].height, (byte**)&pic[0].data );
 	}
 
-	image = R_CreateImage2( ( char * ) name, numLevels, pic, type, flags, 0 );
+	image = R_CreateImage2( ( char * ) adjustedName, numLevels, pic, type, flags, 0, vfs );
 	ri.Free( pic );
 	return image;
 }
@@ -1181,7 +1187,7 @@ R_CreateDlightImage
 ================
 */
 #define	DLIGHT_SIZE	128
-static void R_CreateDlightImage( void ) {
+static void R_CreateDlightImage( vfsNum_t vfs ) {
 	int		x,y;
 	byte	data[DLIGHT_SIZE*DLIGHT_SIZE][4];
 	int		b;
@@ -1237,7 +1243,7 @@ static void R_CreateDlightImage( void ) {
 			data[y*dlightSize + x][3] = 255;
 		}
 	}
-	tr.dlightImage = R_CreateImage("*dlight", (byte *)data, dlightSize, dlightSize, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0 );
+	tr.dlightImage = R_CreateImage("*dlight", (byte *)data, dlightSize, dlightSize, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0, vfs );
 }
 
 
@@ -1317,7 +1323,7 @@ R_CreateFogImages
 Create fog images for exponential and linear fog.
 ================
 */
-static void R_CreateFogImages( void ) {
+static void R_CreateFogImages( vfsNum_t vfs ) {
 	int		x, y, alpha;
 	byte	*data;
 	float	d;
@@ -1340,7 +1346,7 @@ static void R_CreateFogImages( void ) {
 		}
 	}
 
-	tr.fogImage = R_CreateImage("*fog", (byte *)data, fog_s, fog_t, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0 );
+	tr.fogImage = R_CreateImage("*fog", (byte *)data, fog_s, fog_t, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0, vfs );
 	ri.Hunk_FreeTempMemory( data );
 
 
@@ -1375,7 +1381,7 @@ static void R_CreateFogImages( void ) {
 		}
 	}
 
-	tr.linearFogImage = R_CreateImage("*linearfog", (byte *)data, fog_s, fog_t, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0 );
+	tr.linearFogImage = R_CreateImage("*linearfog", (byte *)data, fog_s, fog_t, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0, vfs );
 	ri.Hunk_FreeTempMemory( data );
 }
 
@@ -1412,7 +1418,7 @@ static void R_CreateDefaultImage( void ) {
 		data[x][DEFAULT_SIZE-1][2] =
 		data[x][DEFAULT_SIZE-1][3] = 255;
 	}
-	tr.defaultImage = R_CreateImage("*default", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_MIPMAP, 0);
+	tr.defaultImage = R_CreateImage("*default", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_MIPMAP, 0, VFS_DEFAULT);
 }
 
 /*
@@ -1420,6 +1426,7 @@ static void R_CreateDefaultImage( void ) {
 R_CreateBuiltinImages
 ==================
 */
+// TODO: Make these accessible to any VFS?
 void R_CreateBuiltinImages( void ) {
 	int		x,y;
 	byte	data[DEFAULT_SIZE][DEFAULT_SIZE][4];
@@ -1428,7 +1435,7 @@ void R_CreateBuiltinImages( void ) {
 
 	// we use a solid white image instead of disabling texturing
 	Com_Memset( data, 255, sizeof( data ) );
-	tr.whiteImage = R_CreateImage("*white", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
+	tr.whiteImage = R_CreateImage("*white", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0, VFS_DEFAULT);
 
 	// with overbright bits active, we need an image which is some fraction of full color,
 	// for default lightmaps, etc
@@ -1441,16 +1448,16 @@ void R_CreateBuiltinImages( void ) {
 		}
 	}
 
-	tr.identityLightImage = R_CreateImage("*identityLight", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
+	tr.identityLightImage = R_CreateImage("*identityLight", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0, VFS_DEFAULT);
 
 
 	for(x=0;x<32;x++) {
 		// scratchimage is usually used for cinematic drawing
-		tr.scratchImage[x] = R_CreateImage("*scratch", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_PICMIP | IMGFLAG_CLAMPTOEDGE, 0);
+		tr.scratchImage[x] = R_CreateImage("*scratch", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_PICMIP | IMGFLAG_CLAMPTOEDGE, 0, VFS_DEFAULT);
 	}
 
-	R_CreateDlightImage();
-	R_CreateFogImages();
+	R_CreateDlightImage(VFS_DEFAULT);
+	R_CreateFogImages(VFS_DEFAULT);
 }
 
 

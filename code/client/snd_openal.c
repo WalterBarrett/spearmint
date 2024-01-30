@@ -153,6 +153,7 @@ typedef struct alSfx_s
 	int				loopCnt;		// number of loops using this sfx
 	int				loopActiveCnt;		// number of playing loops using this sfx
 	int				masterLoopSrc;		// All other sources looping this buffer are synced to this master src
+	vfsNum_t		vfs;
 } alSfx_t;
 
 static qboolean alBuffersInitialised = qfalse;
@@ -198,7 +199,7 @@ S_AL_BufferFind
 Find a sound effect if loaded, set up a handle otherwise
 =================
 */
-static sfxHandle_t S_AL_BufferFind(const char *filename)
+static sfxHandle_t S_AL_BufferFind(const char *filename, vfsNum_t vfs)
 {
 	// Look it up in the table
 	sfxHandle_t sfx = -1;
@@ -225,7 +226,7 @@ static sfxHandle_t S_AL_BufferFind(const char *filename)
 
 	for(i = 0; i < numSfx; i++)
 	{
-		if(!Q_stricmp(knownSfx[i].filename, filename))
+		if(!Q_stricmp(knownSfx[i].filename, filename) && knownSfx[i].vfs == vfs)
 		{
 			sfx = i;
 			break;
@@ -244,6 +245,7 @@ static sfxHandle_t S_AL_BufferFind(const char *filename)
 		memset(ptr, 0, sizeof(*ptr));
 		ptr->masterLoopSrc = -1;
 		strcpy(ptr->filename, filename);
+		ptr->vfs = vfs;
 	}
 
 	// Return the handle
@@ -382,7 +384,7 @@ static void S_AL_BufferLoad(sfxHandle_t sfx, qboolean cache)
 		return;
 
 	// Try to load
-	data = S_CodecLoad(curSfx->filename, &info);
+	data = S_CodecLoad(curSfx->filename, &info, curSfx->vfs);
 	if(!data)
 	{
 		S_AL_BufferUseDefault(sfx);
@@ -486,6 +488,7 @@ S_AL_BufferInit
 static
 qboolean S_AL_BufferInit( void )
 {
+	vfsNum_t vfs = VFS_DEFAULT;
 	if(alBuffersInitialised)
 		return qtrue;
 
@@ -494,11 +497,11 @@ qboolean S_AL_BufferInit( void )
 	numSfx = 0;
 
 	// Load the default sound, and lock it
-	default_sfx = S_AL_BufferFind(com_gameConfig.defaultSound);
+	default_sfx = S_AL_BufferFind(com_gameConfig.defaultSound, vfs);
 	S_AL_BufferUse(default_sfx);
 
 	if( knownSfx[default_sfx].isDefault )
-		Com_Error( ERR_FATAL, "Can't load default sound effect %s", com_gameConfig.defaultSound );
+		Com_Error( ERR_FATAL, "Can't load default sound effect %s%s.", com_gameConfig.defaultSound, VFS_Lang_FromVFSName(vfs) );
 
 	knownSfx[default_sfx].isLocked = qtrue;
 
@@ -540,9 +543,9 @@ S_AL_RegisterSound
 =================
 */
 static
-sfxHandle_t S_AL_RegisterSound( const char *sample, qboolean compressed )
+sfxHandle_t S_AL_RegisterSound( const char *sample, qboolean compressed, vfsNum_t vfs )
 {
-	sfxHandle_t sfx = S_AL_BufferFind(sample);
+	sfxHandle_t sfx = S_AL_BufferFind(sample, vfs);
 
 	if((!knownSfx[sfx].inMemory) && (!knownSfx[sfx].isDefault))
 		S_AL_BufferLoad(sfx, s_alPrecache->integer);
@@ -1679,6 +1682,7 @@ static float streamVolume[MAX_STREAMING_SOUNDS];
 static char streamQueued[MAX_STREAMING_SOUNDS][MAX_QPATH];
 static float streamQueuedVolume[MAX_STREAMING_SOUNDS];
 static int streamPlayCount[MAX_STREAMING_SOUNDS];
+static int streamVFS[MAX_STREAMING_SOUNDS];
 
 /*
 =================
@@ -1773,6 +1777,7 @@ static void S_AL_FreeStreamChannel( int stream )
 	{
 		S_CodecCloseStream(streamSoundStreams[stream]);
 		streamSoundStreams[stream] = NULL;
+		streamVFS[stream] = VFS_DEFAULT;
 	}
 }
 
@@ -1894,7 +1899,7 @@ qboolean S_AL_StreamingSoundProcess( int stream, ALuint b )
 		if (streamQueued[stream][0])
 		{
 			streamVolume[stream] = streamQueuedVolume[stream];
-			curstream = S_CodecOpenStream(streamQueued[stream]);
+			curstream = S_CodecOpenStream(streamQueued[stream], streamVFS[stream]);
 		}
 		else
 		{
@@ -2044,7 +2049,7 @@ S_AL_StartStreamingSound
 =================
 */
 static
-void S_AL_StartStreamingSound( int stream, int entityNum, const char *filename, float volume )
+void S_AL_StartStreamingSound( int stream, int entityNum, const char *filename, float volume, vfsNum_t vfs )
 {
 	int i;
 
@@ -2065,8 +2070,9 @@ void S_AL_StartStreamingSound( int stream, int entityNum, const char *filename, 
 	streamVolume[stream] = Com_Clamp(0, 10, volume);
 	streamQueued[stream][0] = 0;
 	streamPlayCount[stream] = 0;
+	streamVFS[stream] = vfs;
 
-	streamSoundStreams[stream] = S_CodecOpenStream(filename);
+	streamSoundStreams[stream] = S_CodecOpenStream(filename, vfs);
 	if(!streamSoundStreams[stream])
 	{
 		S_AL_FreeStreamChannel( stream );
@@ -2108,7 +2114,7 @@ S_AL_QueueStreamingSound
 =================
 */
 static
-void S_AL_QueueStreamingSound( int stream, const char *filename, float volume ) {
+void S_AL_QueueStreamingSound( int stream, const char *filename, float volume, vfsNum_t vfs ) {
 	if ((stream < 0) || (stream >= MAX_STREAMING_SOUNDS))
 		return;
 
@@ -2118,6 +2124,7 @@ void S_AL_QueueStreamingSound( int stream, const char *filename, float volume ) 
 		Q_strncpyz( streamQueued[stream], filename, sizeof( streamQueued[0] ) );
 
 	streamQueuedVolume[stream] = Com_Clamp(0, 10, volume);
+	streamVFS[stream] = vfs;
 }
 
 /*
@@ -2172,10 +2179,14 @@ S_AL_StartBackgroundTrack
 =================
 */
 static
-void S_AL_StartBackgroundTrack( const char *intro, const char *loop, float volume, float loopVolume )
+void S_AL_StartBackgroundTrack( const char *intro, const char *loop, float volume, float loopVolume, vfsNum_t introVfs, vfsNum_t loopVfs )
 {
-	S_AL_StartStreamingSound( 0, -1, intro, volume );
-	S_AL_QueueStreamingSound( 0, (loop && *loop) ? loop : intro, loopVolume );
+	S_AL_StartStreamingSound( 0, -1, intro, volume, introVfs );
+	if (loop && *loop) {
+		S_AL_QueueStreamingSound( 0, loop, loopVolume, loopVfs );
+	} else {
+		S_AL_QueueStreamingSound( 0, intro, loopVolume, introVfs );
+	}
 }
 
 

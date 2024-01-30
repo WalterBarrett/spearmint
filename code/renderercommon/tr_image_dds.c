@@ -466,7 +466,7 @@ static void SetupLinear( textureLevel_t **pic, int width, int height, int depth,
 	}
 }
 
-void R_LoadDDS( const char *name, int *numTexLevels, textureLevel_t **pic )
+void R_LoadDDS( const char *name, int *numTexLevels, textureLevel_t **pic, vfsNum_t vfs )
 {
 	union {
 		byte *b;
@@ -485,7 +485,7 @@ void R_LoadDDS( const char *name, int *numTexLevels, textureLevel_t **pic )
 	//
 	// load the file
 	//
-	length = ri.FS_ReadFile ( ( char * ) name, &buffer.v );
+	length = ri.FS_ReadFile_VFS ( ( char * ) name, &buffer.v, vfs );
 	if ( !buffer.b || length < 0 ) {
 		return;
 	}

@@ -58,8 +58,8 @@ typedef struct snd_stream_s
 } snd_stream_t;
 
 // Codec functions
-typedef void *(*CODEC_LOAD)(const char *filename, snd_info_t *info);
-typedef snd_stream_t *(*CODEC_OPEN)(const char *filename);
+typedef void *(*CODEC_LOAD)(const char *filename, snd_info_t *info, vfsNum_t vfs);
+typedef snd_stream_t *(*CODEC_OPEN)(const char *filename, vfsNum_t vfs);
 typedef int (*CODEC_READ)(snd_stream_t *stream, int bytes, void *buffer);
 typedef void (*CODEC_CLOSE)(snd_stream_t *stream);
 
@@ -78,27 +78,27 @@ struct snd_codec_s
 void S_CodecInit( void );
 void S_CodecShutdown( void );
 void S_CodecRegister(snd_codec_t *codec);
-void *S_CodecLoad(const char *filename, snd_info_t *info);
-snd_stream_t *S_CodecOpenStream(const char *filename);
+void *S_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs);
+snd_stream_t *S_CodecOpenStream(const char *filename, vfsNum_t vfs);
 void S_CodecCloseStream(snd_stream_t *stream);
 int S_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer);
 
 // Util functions (used by codecs)
-snd_stream_t *S_CodecUtilOpen(const char *filename, snd_codec_t *codec);
+snd_stream_t *S_CodecUtilOpen(const char *filename, snd_codec_t *codec, vfsNum_t vfs);
 void S_CodecUtilClose(snd_stream_t **stream);
 
 // WAV Codec
 extern snd_codec_t wav_codec;
-void *S_WAV_CodecLoad(const char *filename, snd_info_t *info);
-snd_stream_t *S_WAV_CodecOpenStream(const char *filename);
+void *S_WAV_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs);
+snd_stream_t *S_WAV_CodecOpenStream(const char *filename, vfsNum_t vfs);
 void S_WAV_CodecCloseStream(snd_stream_t *stream);
 int S_WAV_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer);
 
 // MP3 codec
 #ifdef USE_CODEC_MP3
 extern snd_codec_t mp3_codec;
-void *S_MP3_CodecLoad(const char *filename, snd_info_t *info);
-snd_stream_t *S_MP3_CodecOpenStream(const char *filename);
+void *S_MP3_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs);
+snd_stream_t *S_MP3_CodecOpenStream(const char *filename, vfsNum_t vfs);
 void S_MP3_CodecCloseStream(snd_stream_t *stream);
 int S_MP3_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer);
 #endif // USE_CODEC_MP3
@@ -106,8 +106,8 @@ int S_MP3_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer);
 // Ogg Vorbis codec
 #ifdef USE_CODEC_VORBIS
 extern snd_codec_t ogg_codec;
-void *S_OGG_CodecLoad(const char *filename, snd_info_t *info);
-snd_stream_t *S_OGG_CodecOpenStream(const char *filename);
+void *S_OGG_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs);
+snd_stream_t *S_OGG_CodecOpenStream(const char *filename, vfsNum_t vfs);
 void S_OGG_CodecCloseStream(snd_stream_t *stream);
 int S_OGG_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer);
 #endif // USE_CODEC_VORBIS
@@ -115,8 +115,8 @@ int S_OGG_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer);
 // Ogg Opus codec
 #ifdef USE_CODEC_OPUS
 extern snd_codec_t opus_codec;
-void *S_OggOpus_CodecLoad(const char *filename, snd_info_t *info);
-snd_stream_t *S_OggOpus_CodecOpenStream(const char *filename);
+void *S_OggOpus_CodecLoad(const char *filename, snd_info_t *info, vfsNum_t vfs);
+snd_stream_t *S_OggOpus_CodecOpenStream(const char *filename, vfsNum_t vfs);
 void S_OggOpus_CodecCloseStream(snd_stream_t *stream);
 int S_OggOpus_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer);
 #endif // USE_CODEC_OPUS

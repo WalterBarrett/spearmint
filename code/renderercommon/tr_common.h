@@ -60,6 +60,7 @@ typedef enum
 
 typedef struct image_s {
 	char		imgName[MAX_QPATH];		// game path, including extension
+	vfsNum_t	vfs;
 	int			width, height;				// source image
 	int			uploadWidth, uploadHeight;	// after power of two and picmip but not including clamp to MAX_TEXTURE_SIZE
 	GLuint		texnum;					// gl texture binding
@@ -160,17 +161,17 @@ float R_NoiseGet4f( float x, float y, float z, double t );
 int R_RandomOn( double t );
 void  R_NoiseInit( void );
 
-void	R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic );
-image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags );
-image_t *R_CreateImage( const char *name, byte *pic, int width, int height, imgType_t type, imgFlags_t flags, int internalFormat );
-image_t *R_CreateImage2( const char *name, int numTexLevels, const textureLevel_t *pic, imgType_t type, imgFlags_t flags, int internalFormat );
+void	R_LoadImage( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs );
+image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags, vfsNum_t vfs );
+image_t *R_CreateImage( const char *name, byte *pic, int width, int height, imgType_t type, imgFlags_t flags, int internalFormat, vfsNum_t vfs );
+image_t *R_CreateImage2( const char *name, int numTexLevels, const textureLevel_t *pic, imgType_t type, imgFlags_t flags, int internalFormat, vfsNum_t vfs );
 
 void R_IssuePendingRenderCommands( void );
-qhandle_t		 RE_RegisterShaderEx( const char *name, int lightmapIndex, qboolean mipRawImage );
-qhandle_t		 RE_RegisterShader( const char *name );
-qhandle_t		 RE_RegisterShaderNoMip( const char *name );
-qhandle_t		 RE_RegisterShaderNoPicMip( const char *name );
-qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_t *image, qboolean mipRawImage);
+qhandle_t		 RE_RegisterShaderEx( const char *name, int lightmapIndex, qboolean mipRawImage, vfsNum_t vfs );
+qhandle_t		 RE_RegisterShader( const char *name, vfsNum_t vfs );
+qhandle_t		 RE_RegisterShaderNoMip( const char *name, vfsNum_t vfs );
+qhandle_t		 RE_RegisterShaderNoPicMip( const char *name, vfsNum_t vfs );
+qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_t *image, qboolean mipRawImage, vfsNum_t vfs);
 
 // font stuff
 void R_InitFreeType( void );
@@ -190,13 +191,13 @@ IMAGE LOADERS
 // the individual mip levels, the format is either GL_RGBA8 or a compressed
 // internalformat if the data is precompressed.
 
-void R_LoadBMP( const char *name, int *numLevels, textureLevel_t **pic );
-void R_LoadDDS( const char *name, int *numLevels, textureLevel_t **pic );
-void R_LoadFTX( const char *name, int *numLevels, textureLevel_t **pic );
-void R_LoadJPG( const char *name, int *numLevels, textureLevel_t **pic );
-void R_LoadPCX( const char *name, int *numLevels, textureLevel_t **pic );
-void R_LoadPNG( const char *name, int *numLevels, textureLevel_t **pic );
-void R_LoadTGA( const char *name, int *numLevels, textureLevel_t **pic );
+void R_LoadBMP( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs );
+void R_LoadDDS( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs );
+void R_LoadFTX( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs );
+void R_LoadJPG( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs );
+void R_LoadPCX( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs );
+void R_LoadPNG( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs );
+void R_LoadTGA( const char *name, int *numLevels, textureLevel_t **pic, vfsNum_t vfs );
 
 /*
 ====================================================================

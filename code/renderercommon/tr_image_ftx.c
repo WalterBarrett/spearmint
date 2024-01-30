@@ -34,7 +34,7 @@ typedef struct {
 	int width, height, hasTranparency;
 } FtxHeader;
 
-void R_LoadFTX( const char *name, int *numTexLevels, textureLevel_t **pic )
+void R_LoadFTX( const char *name, int *numTexLevels, textureLevel_t **pic, vfsNum_t vfs )
 {
 	unsigned	numPixels;
 	byte	*buf_p;
@@ -52,7 +52,7 @@ void R_LoadFTX( const char *name, int *numTexLevels, textureLevel_t **pic )
 	//
 	// load the file
 	//
-	length = ri.FS_ReadFile ( ( char * ) name, &buffer.v);
+	length = ri.FS_ReadFile_VFS ( ( char * ) name, &buffer.v, vfs);
 	if ( !buffer.b || length < 0 ) {
 		return;
 	}

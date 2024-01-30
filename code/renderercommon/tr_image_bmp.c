@@ -50,7 +50,7 @@ typedef struct
 	unsigned char palette[256][4];
 } BMPHeader_t;
 
-void R_LoadBMP( const char *name, int *numTexLevels, textureLevel_t **pic )
+void R_LoadBMP( const char *name, int *numTexLevels, textureLevel_t **pic, vfsNum_t vfs )
 {
 	int		columns, rows;
 	unsigned	numPixels;
@@ -72,7 +72,7 @@ void R_LoadBMP( const char *name, int *numTexLevels, textureLevel_t **pic )
 	//
 	// load the file
 	//
-	length = ri.FS_ReadFile( ( char * ) name, &buffer.v);
+	length = ri.FS_ReadFile_VFS( ( char * ) name, &buffer.v, vfs);
 	if (!buffer.b || length < 0) {
 		return;
 	}

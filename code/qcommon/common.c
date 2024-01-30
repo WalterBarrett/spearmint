@@ -1530,10 +1530,28 @@ Com_InitZoneMemory
 =================
 */
 void Com_InitSmallZoneMemory( void ) {
-	s_smallZoneTotal = 512 * 1024;
-	smallzone = calloc( s_smallZoneTotal, 1 );
-	if ( !smallzone ) {
-		Com_Error( ERR_FATAL, "Small zone data failed to allocate %1.1f megs", (float)s_smallZoneTotal / (1024*1024) );
+	static int allocAttempts[] = {
+		1024 * 1024 * 16,
+		1024 * 1024 * 8,
+		1024 * 1024 * 4,
+		1024 * 1024 * 2,
+		1024 * 1024,
+		512 * 1024,
+	};
+	int i;
+
+	for (i = 0; i < ARRAY_LEN(allocAttempts); i++) {
+		s_smallZoneTotal = allocAttempts[i];
+		smallzone = calloc( s_smallZoneTotal, 1 );
+		if ( !smallzone ) {
+			if (i == ARRAY_LEN(allocAttempts) - 1) {
+				Com_Error( ERR_FATAL, "Small zone data failed to allocate %1.1f megs", (float)s_smallZoneTotal / (1024*1024) );
+			} else {
+				Com_Printf( S_COLOR_YELLOW "WARNING: Small zone data failed to allocate %1.1f megs\n", (float)s_smallZoneTotal / (1024*1024) );
+			}
+		} else {
+			break;
+		}
 	}
 	Z_ClearZone( smallzone, s_smallZoneTotal );
 }
@@ -2727,7 +2745,7 @@ void Com_ExecuteCfg(void)
 	{
 		// skip the q3config.cfg and autoexec.cfg if "safe" is on the command line
 		// and only execute q3config.cfg if it exists in current fs_homepath + fs_gamedir
-		if (FS_FileExists(Q3CONFIG_CFG))
+		if (FS_FileExists_VFS(Q3CONFIG_CFG, VFS_DEFAULT))
 		{
 			Cbuf_ExecuteText(EXEC_NOW, "exec " Q3CONFIG_CFG "\n");
 			Cbuf_Execute();
@@ -3057,7 +3075,7 @@ void Com_Init( char *commandLine ) {
 
 	Sys_Init();
 
-	Sys_InitPIDFile( FS_GetCurrentGameDir() );
+	Sys_InitPIDFile( FS_GetCurrentGameDir(VFS_DEFAULT) );
 
 	// Pick a random port value
 	Com_RandomBytes( (byte*)&qport, sizeof(int) );
@@ -3316,11 +3334,14 @@ void Com_InitRef( refimport_t *ri ) {
 	ri->SV_BotDrawDebugPolygons = SV_BotDrawDebugPolygons;
 
 	ri->FS_ReadFile = FS_ReadFile;
+	ri->FS_ReadFile_VFS = FS_ReadFile_VFS;
 	ri->FS_FreeFile = FS_FreeFile;
 	ri->FS_WriteFile = FS_WriteFile;
 	ri->FS_FreeFileList = FS_FreeFileList;
 	ri->FS_ListFiles = FS_ListFiles;
+	ri->FS_ListFiles_VFS = FS_ListFiles_VFS;
 	ri->FS_FileExists = FS_FileExists;
+	ri->FS_FileExists_VFS = FS_FileExists_VFS;
 	ri->Cvar_Get = Cvar_Get;
 	ri->Cvar_Set = Cvar_Set;
 	ri->Cvar_SetValue = Cvar_SetValue;

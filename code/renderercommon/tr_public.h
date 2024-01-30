@@ -30,6 +30,7 @@ Suite 120, Rockville, Maryland 20850 USA.
 #ifndef __TR_PUBLIC_H
 #define __TR_PUBLIC_H
 
+#include "../qcommon/vfs.h"
 #include "tr_types.h"
 #include "../qcommon/bsp.h"
 
@@ -39,7 +40,7 @@ Suite 120, Rockville, Maryland 20850 USA.
   #include <zlib.h>
 #endif
 
-#define	REF_API_VERSION		9
+#define	REF_API_VERSION		10
 
 //
 // these are the functions exported by the refresh module
@@ -63,10 +64,10 @@ typedef struct {
 	// and height, which can be used by the client to intelligently
 	// size display elements
 	void	(*BeginRegistration)( glconfig_t *config );
-	qhandle_t (*RegisterModel)( const char *name );
-	qhandle_t (*RegisterShaderEx)( const char *name, int lightmap, qboolean mip );
-	qhandle_t (*RegisterShader)( const char *name );
-	qhandle_t (*RegisterShaderNoMip)( const char *name );
+	qhandle_t (*RegisterModel)( const char *name, vfsNum_t vfs );
+	qhandle_t (*RegisterShaderEx)( const char *name, int lightmap, qboolean mip, vfsNum_t vfs );
+	qhandle_t (*RegisterShader)( const char *name, vfsNum_t vfs );
+	qhandle_t (*RegisterShaderNoMip)( const char *name, vfsNum_t vfs );
 	qhandle_t (*AllocSkinSurface)( const char *name, qhandle_t hShader );
 	void	(*LoadWorld)( const bspFile_t *bsp );
 
@@ -123,7 +124,7 @@ typedef struct {
 	void    (*A3D_RenderGeometry) (void *pVoidA3D, void *pVoidGeom, void *pVoidMat, void *pVoidGeomStatus);
 #endif
 	void	(*RegisterFont)(const char *fontName, int pointSize, float borderWidth, qboolean forceAutoHint, fontInfo_t *font, int bufsize);
-	void	(*RemapShader)(const char *oldShader, const char *newShader, const char *offsetTime);
+	void	(*RemapShader)(const char *oldShader, const char *newShader, const char *offsetTime, vfsNum_t vfs, vfsNum_t newVfs);
 	qboolean (*GetEntityToken)( char *buffer, int size );
 	qboolean (*inPVS)( const vec3_t p1, const vec3_t p2 );
 
@@ -132,10 +133,11 @@ typedef struct {
 	void (*GetGlobalFog)( fogType_t *type, vec3_t color, float *depthForOpaque, float *density, float *farClip );
 	void (*GetViewFog)( const vec3_t origin, fogType_t *type, vec3_t color, float *depthForOpaque, float *density, float *farClip, qboolean inwater );
 
-	void (*SetSurfaceShader)( int surfaceNum, const char *name );
-	qhandle_t (*GetSurfaceShader)( int surfaceNum, int lightmapIndex );
+	void (*SetSurfaceShader)( int surfaceNum, const char *name, vfsNum_t vfs );
+	qhandle_t (*GetSurfaceShader)( int surfaceNum, int lightmapIndex, vfsNum_t vfs );
 	qhandle_t (*GetShaderFromModel)( qhandle_t hModel, int surfnum, int lightmapIndex );
 	void (*GetShaderName)( qhandle_t hShader, char *buffer, int bufferSize );
+	int (*GetShaderVFS)( qhandle_t hShader );
 } refexport_t;
 
 //
@@ -209,7 +211,7 @@ typedef struct {
 
 	// cinematic stuff
 	void	(*CIN_UploadCinematic)(int handle);
-	int		(*CIN_PlayCinematic)( const char *arg0, int xpos, int ypos, int width, int height, int bits);
+	int		(*CIN_PlayCinematic)( const char *arg0, int xpos, int ypos, int width, int height, int bits, vfsNum_t vfs);
 	e_status (*CIN_RunCinematic) (int handle);
 
 	void	(*CL_WriteAVIVideoFrame)( const byte *buffer, int size );
@@ -238,6 +240,17 @@ typedef struct {
 	// get extra info for png screenshots
 	void	(*CL_GetMapTitle)( char *buf, int bufLength );
 	qboolean (*CL_GetLocalPlayerLocation)( char *buf, int bufLength, int localPlayerNum );
+
+	// extended VFS support
+	long			(*FS_ReadFile_VFS)( const char *name, void **buf, vfsNum_t vfs );
+	char **			(*FS_ListFiles_VFS)( const char *name, const char *extension, int *numfilesfound, vfsNum_t vfs );
+	qboolean		(*FS_FileExists_VFS)( const char *file, vfsNum_t vfs );
+	qboolean		(*VFS_Initialized)( vfsNum_t vfs );
+	const char *	(*VFS_StringFromNum)( vfsNum_t vfs );
+	vfsNum_t		(*VFS_NumFromString)( char* vfsStr );
+	const char *	(*VFS_Lang_FromVFSName)( vfsNum_t vfs );
+	void			(*FS_GetQPathAndVFS)( const char* rawQPath, char outQPath[MAX_QPATH], vfsNum_t* outVfs );
+	void			(*FS_GetShaderTokenAndVFS)( const char* rawShaderToken, char outShaderToken[MAX_TOKEN_CHARS], vfsNum_t* outVfs );
 } refimport_t;
 
 

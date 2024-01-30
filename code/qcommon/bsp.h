@@ -142,6 +142,7 @@ typedef struct {
 
 typedef struct {
 	char			name[MAX_QPATH];
+	vfsNum_t		vfs;
 	int				checksum;
 	int				references;
 
@@ -221,7 +222,11 @@ typedef struct bspFormat_s {
 	const char *gameName;
 	int			ident;
 	int			version;
+#ifndef BSPC
+	bspFile_t	*(*loadFunction)( const struct bspFormat_s *format, const char *name, const void *data, int length, vfsNum_t vfs );
+#else
 	bspFile_t	*(*loadFunction)( const struct bspFormat_s *format, const char *name, const void *data, int length );
+#endif
 	int			(*saveFunction)( const struct bspFormat_s *format, const char *name, const bspFile_t *bsp, void **dataOut );
 } bspFormat_t;
 

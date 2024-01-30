@@ -131,6 +131,7 @@ typedef struct {
 	int					playonwalls;
 	byte*				buf;
 	long				drawX, drawY;
+	vfsNum_t			vfs;
 } cin_cache;
 
 static cinematics_t		cin;
@@ -1086,7 +1087,7 @@ static void RoQReset( void ) {
 	if (currentHandle < 0) return;
 
 	FS_FCloseFile( cinTable[currentHandle].iFile );
-	FS_FOpenFileRead (cinTable[currentHandle].fileName, &cinTable[currentHandle].iFile, qtrue);
+	FS_FOpenFileRead_VFS (cinTable[currentHandle].fileName, &cinTable[currentHandle].iFile, qtrue, cinTable[currentHandle].vfs);
 	// let the background thread start reading ahead
 	FS_Read (cin.file, 16, cinTable[currentHandle].iFile);
 	RoQ_init();
@@ -1409,7 +1410,7 @@ e_status CIN_RunCinematic (int handle)
 CIN_PlayCinematic
 ==================
 */
-int CIN_PlayCinematic( const char *arg, int x, int y, int w, int h, int systemBits ) {
+int CIN_PlayCinematic( const char *arg, int x, int y, int w, int h, int systemBits, vfsNum_t vfs ) {
 	unsigned short RoQID;
 	char	name[MAX_OSPATH];
 	int		i;
@@ -1436,9 +1437,10 @@ int CIN_PlayCinematic( const char *arg, int x, int y, int w, int h, int systemBi
 	cin.currentHandle = currentHandle;
 
 	strcpy(cinTable[currentHandle].fileName, name);
+	cinTable[currentHandle].vfs = vfs;
 
 	cinTable[currentHandle].ROQSize = 0;
-	cinTable[currentHandle].ROQSize = FS_FOpenFileRead (cinTable[currentHandle].fileName, &cinTable[currentHandle].iFile, qtrue);
+	cinTable[currentHandle].ROQSize = FS_FOpenFileRead_VFS (cinTable[currentHandle].fileName, &cinTable[currentHandle].iFile, qtrue, cinTable[currentHandle].vfs);
 
 	if (cinTable[currentHandle].ROQSize<=0) {
 		Com_DPrintf("play(%s), ROQSize<=0\n", arg);

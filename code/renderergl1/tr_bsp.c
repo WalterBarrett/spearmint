@@ -228,7 +228,7 @@ static	void R_LoadLightmaps( const bspFile_t *bsp ) {
 
 	// get number of external lightmaps
 	if (tr.worldDir) {
-		ri.FS_ListFiles(tr.worldDir, ".tga", &numExternalLightmaps);
+		ri.FS_ListFiles_VFS(tr.worldDir, ".tga", &numExternalLightmaps, bsp->vfs);
 	}
 
 	if ( !bsp->numLightmaps ) {
@@ -264,7 +264,7 @@ static	void R_LoadLightmaps( const bspFile_t *bsp ) {
 
 		tr.lightmaps[i] = R_CreateImage( va("*lightmap%d",i), image, 
 			LIGHTMAP_SIZE, LIGHTMAP_SIZE, IMGTYPE_COLORALPHA,
-			IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, 0 );
+			IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, 0, bsp->vfs );
 	}
 
 	if ( r_lightmap->integer > 1 )	{
@@ -322,7 +322,7 @@ static	void R_LoadVisibility( const bspFile_t *bsp ) {
 ShaderForShaderNum
 ===============
 */
-static shader_t *ShaderForShaderNum( int shaderNum, int lightmapNum ) {
+static shader_t *ShaderForShaderNum( int shaderNum, int lightmapNum, vfsNum_t vfs ) {
 	shader_t	*shader;
 	dshader_t	*dsh;
 
@@ -340,7 +340,7 @@ static shader_t *ShaderForShaderNum( int shaderNum, int lightmapNum ) {
 		lightmapNum = LIGHTMAP_WHITEIMAGE;
 	}
 
-	shader = R_FindShader( dsh->shader, lightmapNum, MIP_RAW_IMAGE );
+	shader = R_FindShader( dsh->shader, lightmapNum, MIP_RAW_IMAGE, vfs );
 
 	// if the shader had errors, just use default shader
 	if ( shader->defaultShader ) {
@@ -449,7 +449,7 @@ static void FinishGenericSurface( dsurface_t *ds, srfGeneric_t *gen, vec3_t pt )
 ParseMesh
 ===============
 */
-static void ParseMesh( dsurface_t *ds, drawVert_t *verts, msurface_t *surf ) {
+static void ParseMesh( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, vfsNum_t vfs ) {
 	srfGridMesh_t   *grid;
 	int i, j;
 	int width, height, numPoints;
@@ -465,7 +465,7 @@ static void ParseMesh( dsurface_t *ds, drawVert_t *verts, msurface_t *surf ) {
 	surf->fogIndex = ConvertBSPFogNum( ds->fogNum );
 
 	// get shader value
-	surf->shader = ShaderForShaderNum( ds->shaderNum, lightmapNum );
+	surf->shader = ShaderForShaderNum( ds->shaderNum, lightmapNum, vfs );
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -524,7 +524,7 @@ static void ParseMesh( dsurface_t *ds, drawVert_t *verts, msurface_t *surf ) {
 ParseTriSurf
 ===============
 */
-static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int *indexes, qboolean planar ) {
+static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int *indexes, qboolean planar, vfsNum_t vfs ) {
 	srfTriangles_t	*tri;
 	int				i, j;
 	int				numVerts, numIndexes;
@@ -544,7 +544,7 @@ static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, i
 	surf->fogIndex = ConvertBSPFogNum( ds->fogNum );
 
 	// get shader
-	surf->shader = ShaderForShaderNum( ds->shaderNum, lightmapNum );
+	surf->shader = ShaderForShaderNum( ds->shaderNum, lightmapNum, vfs );
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -611,7 +611,7 @@ ParseFoliage
 parses a foliage drawsurface
 ===============
 */
-static void ParseFoliage( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int *indexes ) {
+static void ParseFoliage( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int *indexes, vfsNum_t vfs ) {
 	srfFoliage_t    *foliage;
 	int i, j, numVerts, numIndexes, numInstances, size;
 	//vec4_t          *origin;
@@ -624,7 +624,7 @@ static void ParseFoliage( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, i
 	surf->fogIndex = ConvertBSPFogNum( ds->fogNum );
 
 	// get shader
-	surf->shader = ShaderForShaderNum( ds->shaderNum, LIGHTMAP_BY_VERTEX );
+	surf->shader = ShaderForShaderNum( ds->shaderNum, LIGHTMAP_BY_VERTEX, vfs );
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -742,7 +742,7 @@ static void ParseFoliage( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, i
 ParseFlare
 ===============
 */
-static void ParseFlare( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int *indexes ) {
+static void ParseFlare( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int *indexes, vfsNum_t vfs ) {
 	srfFlare_t		*flare;
 	int				i;
 
@@ -750,7 +750,7 @@ static void ParseFlare( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, int
 	surf->fogIndex = ConvertBSPFogNum( ds->fogNum );
 
 	// get shader
-	surf->shader = ShaderForShaderNum( ds->shaderNum, LIGHTMAP_BY_VERTEX );
+	surf->shader = ShaderForShaderNum( ds->shaderNum, LIGHTMAP_BY_VERTEX, vfs );
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -1506,27 +1506,27 @@ static	void R_LoadSurfaces( const bspFile_t *bsp ) {
 	for ( i = 0 ; i < count ; i++, in++, out++ ) {
 		switch ( LittleLong( in->surfaceType ) ) {
 		case MST_PATCH:
-			ParseMesh ( in, dv, out );
+			ParseMesh ( in, dv, out, bsp->vfs );
 			numMeshes++;
 			break;
 		case MST_TRIANGLE_SOUP:
-			ParseTriSurf( in, dv, out, indexes, qfalse );
+			ParseTriSurf( in, dv, out, indexes, qfalse, bsp->vfs );
 			numTriSurfs++;
 			break;
 		case MST_PLANAR:
-			ParseTriSurf( in, dv, out, indexes, qtrue );
+			ParseTriSurf( in, dv, out, indexes, qtrue, bsp->vfs );
 			numFaces++;
 			break;
 		case MST_FLARE:
-			ParseFlare( in, dv, out, indexes );
+			ParseFlare( in, dv, out, indexes, bsp->vfs );
 			numFlares++;
 			break;
 		case MST_FOLIAGE:
-			ParseFoliage( in, dv, out, indexes );
+			ParseFoliage( in, dv, out, indexes, bsp->vfs );
 			numFoliage++;
 			break;
 		case MST_TERRAIN:
-			ParseTriSurf( in, dv, out, indexes, qfalse );
+			ParseTriSurf( in, dv, out, indexes, qfalse, bsp->vfs );
 			numTerrain++;
 			break;
 		default:
@@ -1579,6 +1579,7 @@ static	void R_LoadSubmodels( const bspFile_t *bsp ) {
 		model->type = MOD_BRUSH;
 		model->bmodel = out;
 		Com_sprintf( model->name, sizeof( model->name ), "*%d", i );
+		model->vfs = bsp->vfs;
 
 		for (j=0 ; j<3 ; j++) {
 			out->bounds[0][j] = LittleFloat (in->mins[j]);
@@ -1904,7 +1905,7 @@ static	void R_LoadFogs( const bspFile_t *bsp ) {
 		}
 
 		// get information from the shader for fog parameters
-		shader = R_FindShader( fogs->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE );
+		shader = R_FindShader( fogs->shader, LIGHTMAP_NONE, MIP_RAW_IMAGE, bsp->vfs );
 
 		out->shader = shader;
 
@@ -2006,7 +2007,9 @@ void R_LoadEntities( const bspFile_t *bsp ) {
 	char *p, *token, *s;
 	char keyname[MAX_TOKEN_CHARS];
 	char value[MAX_TOKEN_CHARS];
+	char adjtoken[MAX_TOKEN_CHARS];
 	world_t	*w;
+	vfsNum_t newVfs;
 
 	w = &s_worldData;
 	w->lightGridSize[0] = bsp->defaultLightGridSize[0];
@@ -2052,7 +2055,9 @@ void R_LoadEntities( const bspFile_t *bsp ) {
 			}
 			*s++ = 0;
 			if (r_vertexLight->integer) {
-				R_RemapShader(value, s, "0");
+				newVfs = VFS_DEFAULT;
+				ri.FS_GetShaderTokenAndVFS(s, adjtoken, &newVfs);
+				R_RemapShader(value, s, "0", bsp->vfs, newVfs);
 			}
 			continue;
 		}
@@ -2065,7 +2070,9 @@ void R_LoadEntities( const bspFile_t *bsp ) {
 				break;
 			}
 			*s++ = 0;
-			R_RemapShader(value, s, "0");
+			newVfs = VFS_DEFAULT;
+			ri.FS_GetShaderTokenAndVFS(s, adjtoken, &newVfs);
+			R_RemapShader(value, adjtoken, "0", bsp->vfs, newVfs);
 			continue;
 		}
 		// check for a different grid size
@@ -2137,6 +2144,8 @@ void RE_LoadWorldMap( const bspFile_t *bsp ) {
 	Q_strncpyz( s_worldData.baseName, COM_SkipPath( s_worldData.name ), sizeof( s_worldData.name ) );
 	COM_StripExtension(s_worldData.baseName, s_worldData.baseName, sizeof(s_worldData.baseName));
 
+	s_worldData.vfs = bsp->vfs;
+
 	startMarker = ri.Hunk_Alloc(0, h_low);
 	c_gridVerts = 0;
 
@@ -2170,6 +2179,6 @@ void RE_LoadWorldMap( const bspFile_t *bsp ) {
 		tr.globalFogFarClip = shader->fogParms.farClip;
 	}
 
-	R_InitExternalShaders();
+	R_InitExternalShaders( bsp->vfs );
 }
 

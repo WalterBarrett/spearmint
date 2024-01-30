@@ -51,6 +51,7 @@ static char		s_backgroundLoop[MAX_STREAMING_SOUNDS][MAX_QPATH];
 static float	s_backgroundLoopVolume[MAX_STREAMING_SOUNDS];
 static int		s_backgroundEntityNum[MAX_STREAMING_SOUNDS];
 static int		s_backgroundPlayCount[MAX_STREAMING_SOUNDS];
+static vfsNum_t	s_backgroundVFS[MAX_STREAMING_SOUNDS];
 
 
 // =======================================================================
@@ -255,7 +256,7 @@ S_FindName
 Will allocate a new sfx if it isn't found
 ==================
 */
-static sfx_t *S_FindName( const char *name ) {
+static sfx_t *S_FindName( const char *name, vfsNum_t vfs ) {
 	int		i;
 	int		hash;
 
@@ -308,6 +309,7 @@ static sfx_t *S_FindName( const char *name ) {
 	sfx = &s_knownSfx[i];
 	Com_Memset (sfx, 0, sizeof(*sfx));
 	strcpy (sfx->soundName, name);
+	sfx->vfs = vfs;
 
 	sfx->next = sfxHash[hash];
 	sfxHash[hash] = sfx;
@@ -355,7 +357,7 @@ S_RegisterSound
 Creates a default buzz sound if the file can't be loaded
 ==================
 */
-sfxHandle_t	S_Base_RegisterSound( const char *name, qboolean compressed ) {
+sfxHandle_t	S_Base_RegisterSound( const char *name, qboolean compressed, vfsNum_t vfs ) {
 	sfx_t	*sfx;
 
 	compressed = qfalse;
@@ -363,7 +365,7 @@ sfxHandle_t	S_Base_RegisterSound( const char *name, qboolean compressed ) {
 		return 0;
 	}
 
-	sfx = S_FindName( name );
+	sfx = S_FindName( name, vfs );
 	if ( !sfx ) {
 		return 0;
 	}
@@ -411,6 +413,7 @@ S_BeginRegistration
 =====================
 */
 void S_Base_BeginRegistration( void ) {
+	vfsNum_t vfs = VFS_DEFAULT;
 	s_soundMuted = qfalse;		// we can play again
 
 	if (s_numSfx == 0) {
@@ -421,10 +424,10 @@ void S_Base_BeginRegistration( void ) {
 		Com_Memset(s_knownSfx, '\0', sizeof(s_knownSfx));
 		Com_Memset(sfxHash, '\0', sizeof(sfx_t *) * LOOP_HASH);
 
-		default_sfx = S_Base_RegisterSound(com_gameConfig.defaultSound, qfalse);
+		default_sfx = S_Base_RegisterSound(com_gameConfig.defaultSound, qfalse, vfs);
 
 		if ( s_knownSfx[default_sfx].defaultSound )
-			Com_Error( ERR_FATAL, "Can't load default sound effect %s", com_gameConfig.defaultSound );
+			Com_Error( ERR_FATAL, "Can't load default sound effect %s%s", com_gameConfig.defaultSound, VFS_Lang_FromVFSName(vfs) );
 	}
 }
 
@@ -1440,7 +1443,7 @@ void S_Base_StopBackgroundTrack( void ) {
 S_Base_OpenStream
 ======================
 */
-void S_Base_OpenStream( int stream, const char *filename ) {
+void S_Base_OpenStream( int stream, const char *filename, vfsNum_t vfs ) {
 	// close the background track, but DON'T reset s_rawend
 	// if restarting the same back ground track
 	if(s_backgroundStream[stream])
@@ -1450,7 +1453,7 @@ void S_Base_OpenStream( int stream, const char *filename ) {
 	}
 
 	// Open stream
-	s_backgroundStream[stream] = S_CodecOpenStream(filename);
+	s_backgroundStream[stream] = S_CodecOpenStream(filename, vfs);
 	if(!s_backgroundStream[stream]) {
 		Com_Printf( S_COLOR_YELLOW "WARNING: couldn't open music file %s\n", filename );
 		return;
@@ -1466,11 +1469,11 @@ void S_Base_OpenStream( int stream, const char *filename ) {
 S_StartStreamingSound
 ======================
 */
-void S_Base_StartStreamingSound( int stream, int entityNum, const char *filename, float volume ) {
+void S_Base_StartStreamingSound( int stream, int entityNum, const char *filename, float volume, vfsNum_t vfs ) {
 	if ( !filename ) {
 		filename = "";
 	}
-	Com_DPrintf( "S_Base_StartStreamingSound( %d, %d, %s, %f )\n", stream, entityNum, filename, volume );
+	Com_DPrintf( "S_Base_StartStreamingSound( %d, %d, %s, %f, %i )\n", stream, entityNum, filename, volume, vfs );
 
 	if(stream < 0 || stream >= MAX_STREAMING_SOUNDS)
 		return;
@@ -1486,8 +1489,9 @@ void S_Base_StartStreamingSound( int stream, int entityNum, const char *filename
 
 	s_backgroundLoop[stream][0] = 0;
 	s_backgroundPlayCount[stream] = 0;
+	s_backgroundVFS[stream] = vfs;
 
-	S_Base_OpenStream( stream, filename );
+	S_Base_OpenStream( stream, filename, vfs );
 }
 
 /*
@@ -1495,14 +1499,16 @@ void S_Base_StartStreamingSound( int stream, int entityNum, const char *filename
 S_QueueStreamingSound
 ======================
 */
-void S_Base_QueueStreamingSound( int stream, const char *filename, float volume ) {
+void S_Base_QueueStreamingSound( int stream, const char *filename, float volume, vfsNum_t vfs ) {
 	if(stream < 0 || stream >= MAX_STREAMING_SOUNDS)
 		return;
 
 	if( !filename ) {
 		s_backgroundLoop[stream][0] = 0;
+		s_backgroundVFS[stream] = VFS_DEFAULT;
 	} else {
 		Q_strncpyz( s_backgroundLoop[stream], filename, sizeof( s_backgroundLoop[0] ) );
+		s_backgroundVFS[stream] = vfs;
 	}
 
 	s_backgroundLoopVolume[stream] = Com_Clamp(0, 10, volume);
@@ -1544,9 +1550,13 @@ void S_Base_SetStreamVolume( int stream, float volume ) {
 S_StartBackgroundTrack
 ======================
 */
-void S_Base_StartBackgroundTrack( const char *intro, const char *loop, float volume, float loopVolume ) {
-	S_Base_StartStreamingSound( 0, -1, intro, volume );
-	S_Base_QueueStreamingSound( 0, (loop && *loop) ? loop : intro, loopVolume );
+void S_Base_StartBackgroundTrack( const char *intro, const char *loop, float volume, float loopVolume, vfsNum_t introVfs, vfsNum_t loopVfs ) {
+	S_Base_StartStreamingSound( 0, -1, intro, volume, introVfs );
+	if (loop && *loop) {
+		S_Base_QueueStreamingSound( 0, loop, loopVolume, loopVfs );
+	} else {
+		S_Base_QueueStreamingSound( 0, intro, loopVolume, introVfs );
+	}
 }
 
 /*
@@ -1615,7 +1625,7 @@ void S_UpdateStreamingSounds( void ) {
 				if(s_backgroundLoop[stream][0])
 				{
 					s_backgroundVolume[stream] = s_backgroundLoopVolume[stream];
-					S_Base_OpenStream( stream, s_backgroundLoop[stream] );
+					S_Base_OpenStream( stream, s_backgroundLoop[stream], s_backgroundVFS[stream] );
 					if(!s_backgroundStream[stream])
 						break;
 				}

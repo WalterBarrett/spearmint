@@ -512,7 +512,7 @@ static void SV_RehashBans_f(void)
 	if(!sv_banFile->string || !*sv_banFile->string)
 		return;
 
-	Com_sprintf(filepath, sizeof(filepath), "%s/%s", FS_GetCurrentGameDir(), sv_banFile->string);
+	Com_sprintf(filepath, sizeof(filepath), "%s/%s", FS_GetCurrentGameDir(VFS_DEFAULT), sv_banFile->string);
 
 	if((filelen = FS_SV_FOpenFileRead(filepath, &readfrom)) >= 0)
 	{
@@ -591,7 +591,7 @@ static void SV_WriteBans(void)
 	if(!sv_banFile->string || !*sv_banFile->string)
 		return;
 	
-	Com_sprintf(filepath, sizeof(filepath), "%s/%s", FS_GetCurrentGameDir(), sv_banFile->string);
+	Com_sprintf(filepath, sizeof(filepath), "%s/%s", FS_GetCurrentGameDir(VFS_DEFAULT), sv_banFile->string);
 
 	if((writeto = FS_SV_FOpenFileWrite(filepath)))
 	{

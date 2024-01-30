@@ -458,7 +458,7 @@ vmHeader_t *VM_LoadQVM( vm_t *vm, qboolean alloc, qboolean unpure, int heapReque
 
 	if (com_developer->integer) {
 		// show where the qvm was loaded from
-		FS_Which(filename, vm->searchPath);
+		FS_Which(filename, vm->searchPath, VFS_DEFAULT);
 	}
 
 	if( LittleLong( header.h->vmMagic ) == VM_MAGIC_VER2_NEO ) {
@@ -484,7 +484,7 @@ vmHeader_t *VM_LoadQVM( vm_t *vm, qboolean alloc, qboolean unpure, int heapReque
 		Com_Printf( S_COLOR_YELLOW "Warning: Ignoring unsupported legacy qvm: " );
 
 		// show where the qvm was loaded from
-		FS_Which(filename, vm->searchPath);
+		FS_Which(filename, vm->searchPath, VFS_DEFAULT);
 
 		VM_Free( vm );
 		FS_FreeFile( header.v );

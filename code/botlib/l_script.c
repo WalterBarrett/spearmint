@@ -231,7 +231,7 @@ void QDECL ScriptError(script_t *script, char *str, ...)
 	Q_vsnprintf(text, sizeof(text), str, ap);
 	va_end(ap);
 #ifdef BOTLIB
-	Com_Printf(S_COLOR_RED "Error: file %s, line %d: %s\n", script->filename, script->line, text);
+	Com_Printf(S_COLOR_RED "Error: file %s%s, line %d: %s\n", script->filename, VFS_Lang_FromVFSName(script->vfs), script->line, text);
 #endif //BOTLIB
 #ifdef BSPC
 	Log_Print("error: file %s, line %d: %s\n", script->filename, script->line, text);
@@ -254,7 +254,7 @@ void QDECL ScriptWarning(script_t *script, char *str, ...)
 	Q_vsnprintf(text, sizeof(text), str, ap);
 	va_end(ap);
 #ifdef BOTLIB
-	Com_Printf(S_COLOR_YELLOW "Warning: file %s, line %d: %s\n", script->filename, script->line, text);
+	Com_Printf(S_COLOR_YELLOW "Warning: file %s%s, line %d: %s\n", script->filename, VFS_Lang_FromVFSName(script->vfs) , script->line, text);
 #endif //BOTLIB
 #ifdef BSPC
 	Log_Print("warning: file %s, line %d: %s\n", script->filename, script->line, text);
@@ -1309,7 +1309,7 @@ int FileLength(FILE *fp)
 // Returns:					-
 // Changes Globals:		-
 //============================================================================
-script_t *LoadScriptFile(const char *filename)
+script_t *LoadScriptFile(const char *filename, vfsNum_t vfs)
 {
 #ifdef BOTLIB
 	fileHandle_t fp;
@@ -1326,7 +1326,7 @@ script_t *LoadScriptFile(const char *filename)
 		Com_sprintf(pathname, sizeof(pathname), "%s/%s", basefolder, filename);
 	else
 		Com_sprintf(pathname, sizeof(pathname), "%s", filename);
-	length = FS_FOpenFileByMode( pathname, &fp, FS_READ );
+	length = FS_FOpenFileByMode_VFS( pathname, &fp, FS_READ, vfs );
 	if (!fp) return NULL;
 #else
 	fp = fopen(filename, "rb");
@@ -1339,6 +1339,7 @@ script_t *LoadScriptFile(const char *filename)
 	script = (script_t *) buffer;
 	Com_Memset(script, 0, sizeof(script_t));
 	Q_strncpyz(script->filename, filename, sizeof(script->filename));
+	script->vfs = vfs;
 	script->buffer = (char *) buffer + sizeof(script_t);
 	script->buffer[length] = 0;
 	script->length = length;
@@ -1376,7 +1377,11 @@ script_t *LoadScriptFile(const char *filename)
 // Returns:				-
 // Changes Globals:		-
 //============================================================================
+#ifndef BSPC
+script_t *LoadScriptMemory(const char *ptr, int length, const char *name, vfsNum_t vfs)
+#else
 script_t *LoadScriptMemory(const char *ptr, int length, const char *name)
+#endif
 {
 	void *buffer;
 	script_t *script;
@@ -1385,6 +1390,9 @@ script_t *LoadScriptMemory(const char *ptr, int length, const char *name)
 	script = (script_t *) buffer;
 	Com_Memset(script, 0, sizeof(script_t));
 	Q_strncpyz(script->filename, name, sizeof(script->filename));
+#ifndef BSPC
+	script->vfs = vfs;
+#endif
 	script->buffer = (char *) buffer + sizeof(script_t);
 	script->buffer[length] = 0;
 	script->length = length;
